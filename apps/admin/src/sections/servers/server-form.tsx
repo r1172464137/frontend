@@ -18,7 +18,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -114,8 +113,9 @@ function normalizeMultiplexValue(
 }
 
 const PRESERVED_HIDDEN_PROTOCOL_FIELDS = new Set([
-  // A transport change hides the control but must not reset its stored value.
+  // Transport/security changes hide these controls, not their stored values.
   "accept_proxy_protocol",
+  "reality_xver",
   "server_key",
   "reality_private_key",
   "reality_public_key",
@@ -283,8 +283,11 @@ function DynamicField({
               <FormLabel>{getFieldLabel(field)}</FormLabel>
               <FormControl>
                 <Select
+                  name={fieldName}
                   onValueChange={(value) => {
-                    fieldProps.onChange(value);
+                    fieldProps.onChange(
+                      field.valueType === "number" ? Number(value) : value
+                    );
                     if (field.name === "security") {
                       if (
                         value === "tls" &&
@@ -316,14 +319,14 @@ function DynamicField({
                   value={String(fieldProps.value ?? field.defaultValue ?? "")}
                 >
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger data-field={fieldName}>
                       <SelectValue />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {field.options?.map((option) => (
                       <SelectItem key={option} value={option}>
-                        {getLabel(option)}
+                        {field.optionLabels?.[option] ?? getLabel(option)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -351,9 +354,6 @@ function DynamicField({
                   />
                 </FormControl>
               </div>
-              {field.description ? (
-                <FormDescription>{field.description}</FormDescription>
-              ) : null}
               <FormMessage />
             </FormItem>
           )}
@@ -649,9 +649,13 @@ export default function ServerForm(props: {
         }
 
         if (field.type === "select") {
-          const hasValue = typeof value === "string" && value.trim().length > 0;
+          const hasValue =
+            field.valueType === "number"
+              ? typeof value === "number" && Number.isFinite(value)
+              : typeof value === "string" && value.trim().length > 0;
           const isAllowed =
-            !field.options || (hasValue && field.options.includes(value));
+            !field.options ||
+            (hasValue && field.options.includes(String(value)));
 
           if (!(hasValue && isAllowed)) {
             form.setError(fieldPath, {

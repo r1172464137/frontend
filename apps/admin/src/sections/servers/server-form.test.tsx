@@ -117,6 +117,7 @@ describe("PROXY protocol field definitions", () => {
         (item) => item.name === "accept_proxy_protocol"
       );
       expect(field).toMatchObject({ type: "switch", defaultValue: false });
+      expect(field).not.toHaveProperty("description");
       for (const transport of ["tcp", "ws", "websocket", "httpupgrade"]) {
         expect(field?.condition?.({ transport, security: "none" }, {})).toBe(
           true
@@ -192,13 +193,219 @@ describe("PROXY protocol field definitions", () => {
   });
 });
 
+function xverSelect() {
+  return screen.getByRole("combobox", {
+    name: "Send PROXY protocol to target",
+  });
+}
+
+function changeSelect(label: string, value: string) {
+  const select = screen
+    .getByRole("combobox", { name: label })
+    .closest('[data-slot="form-item"]')
+    ?.querySelector("select");
+  // Exercise Radix's real onValueChange, not a mocked form setter.
+  if (!select) throw new Error(`Missing native select for ${label}`);
+  fireEvent.change(select, { target: { value } });
+}
+
+const realityTypes = ["vmess", "vless", "trojan"] as const;
+
+function realityServer(type: (typeof realityTypes)[number], xver?: 0 | 1 | 2) {
+  return {
+    ...server,
+    protocols: [
+      {
+        ...server.protocols![0],
+        type,
+        accept_proxy_protocol: true,
+        ...(xver === undefined ? {} : { reality_xver: xver }),
+      },
+      server.protocols![1],
+    ],
+  } as Partial<API.Server>;
+}
+
+describe("REALITY target PROXY protocol field", () => {
+  it("only offers numeric target sending in VMess/VLESS/Trojan REALITY", () => {
+    const { result } = renderHook(() => useProtocolFields());
+    for (const [type, fields] of Object.entries(result.current)) {
+      const field = fields.find((item) => item.name === "reality_xver");
+      if (!realityTypes.includes(type as (typeof realityTypes)[number])) {
+        expect(field).toBeUndefined();
+        continue;
+      }
+      expect(field).toMatchObject({
+        type: "select",
+        group: "reality",
+        defaultValue: 0,
+        valueType: "number",
+        options: ["0", "1", "2"],
+        optionLabels: { "0": "Do not send", "1": "PROXY v1", "2": "PROXY v2" },
+      });
+      for (const security of ["none", "tls", undefined]) {
+        expect(field?.condition?.({ security }, {})).toBe(false);
+      }
+      // No new transport restriction; existing protocol validation still applies.
+      for (const transport of ["tcp", "ws", "httpupgrade", "grpc", "xhttp"]) {
+        expect(field?.condition?.({ security: "reality", transport }, {})).toBe(
+          true
+        );
+      }
+    }
+  });
+
+  it.each(
+    realityTypes
+  )("defaults omitted %s xver to numeric zero and accepts only 0/1/2", (type) => {
+    expect(getProtocolDefaultConfig(type).reality_xver).toBe(0);
+    const parse = (protocol: Record<string, unknown>) =>
+      formSchema.safeParse({ ...server, protocols: [{ type, ...protocol }] });
+    expect(parse({})).toMatchObject({
+      success: true,
+      data: { protocols: [{ reality_xver: 0 }] },
+    });
+    for (const value of [0, 1, 2]) {
+      expect(parse({ reality_xver: value })).toMatchObject({
+        success: true,
+        data: { protocols: [{ reality_xver: value }] },
+      });
+    }
+    for (const value of ["0", "1", "2", null, true, false, -1, 3, 1.5]) {
+      expect(parse({ reality_xver: value }).success).toBe(false);
+    }
+  });
+});
+
+describe.each(
+  realityTypes
+)("%s REALITY xver real form submit/reopen", (type) => {
+  it("loads an omitted legacy value as zero, preserves reception, and reopens at zero", async () => {
+    const { onSubmit, unmount } = openForm(realityServer(type), type);
+    expect(xverSelect().textContent).toBe("Do not send");
+    expect(xverSelect().getAttribute("data-field")).toMatch(
+      /protocols\.\d+\.reality_xver/
+    );
+    const saved = await save(onSubmit);
+    expect(saved.protocols[0]).toMatchObject({
+      type,
+      reality_xver: 0,
+      accept_proxy_protocol: true,
+    });
+    expect(typeof onSubmit.mock.calls[0]?.[0].protocols[0].reality_xver).toBe(
+      "number"
+    );
+    expect(saved.protocols[1]).toMatchObject(server.protocols![1]!);
+    unmount();
+    const reopened = openForm(saved, type);
+    expect(xverSelect().textContent).toBe("Do not send");
+    expect(proxySwitch().getAttribute("aria-checked")).toBe("true");
+    expect(await save(reopened.onSubmit)).toEqual(saved);
+  });
+
+  it.each([
+    0, 1, 2,
+  ] as const)("sends selected xver=%s as a JSON number and preserves it on reopen", async (value) => {
+    const { onSubmit, unmount } = openForm(
+      realityServer(type, value === 0 ? 2 : 0),
+      type
+    );
+    const original = await save(onSubmit);
+    changeSelect("Send PROXY protocol to target", String(value));
+    const saved = await save(onSubmit);
+    expect(saved.protocols[0].reality_xver).toBe(value);
+    expect(typeof onSubmit.mock.calls[1]?.[0].protocols[0].reality_xver).toBe(
+      "number"
+    );
+    expect(saved.protocols[0].accept_proxy_protocol).toBe(true);
+    expect({
+      ...saved,
+      protocols: [
+        {
+          ...saved.protocols[0],
+          reality_xver: original.protocols[0].reality_xver,
+        },
+        ...saved.protocols.slice(1),
+      ],
+    }).toEqual(original);
+    unmount();
+    const reopened = openForm(saved, type);
+    expect(xverSelect().textContent).toBe(
+      ["Do not send", "PROXY v1", "PROXY v2"][value]
+    );
+    expect(proxySwitch().getAttribute("aria-checked")).toBe("true");
+    expect(await save(reopened.onSubmit)).toEqual(saved);
+  });
+
+  it("preserves hidden xver on a security change, save, and reopen", async () => {
+    const { onSubmit, unmount } = openForm(realityServer(type, 2), type);
+    const original = await save(onSubmit);
+    changeSelect("Security", "tls");
+    expect(
+      screen.queryByRole("combobox", { name: "Send PROXY protocol to target" })
+    ).toBeNull();
+    const hidden = await save(onSubmit);
+    expect(hidden.protocols[0]).toMatchObject({
+      security: "tls",
+      reality_xver: 2,
+      accept_proxy_protocol: true,
+    });
+    changeSelect("Security", "reality");
+    expect(xverSelect().textContent).toBe("PROXY v2");
+    expect(await save(onSubmit)).toEqual(original);
+    unmount();
+    const reopened = openForm(hidden, type);
+    expect(
+      screen.queryByRole("combobox", { name: "Send PROXY protocol to target" })
+    ).toBeNull();
+    expect(await save(reopened.onSubmit)).toEqual(hidden);
+    changeSelect("Security", "reality");
+    expect(xverSelect().textContent).toBe("PROXY v2");
+  });
+});
+
+describe("per-protocol REALITY xver independence", () => {
+  it("keeps distinct 0/1/2 values in one server and does not couple sending to reception", async () => {
+    const initialValues = {
+      ...server,
+      protocols: realityTypes.map((type, index) => ({
+        ...realityServer(type).protocols![0],
+        reality_xver: index,
+      })),
+    } as Partial<API.Server>;
+    const { onSubmit } = openForm(initialValues, "vless");
+    const original = await save(onSubmit);
+    expect(
+      original.protocols.map((protocol: API.Protocol) => protocol.reality_xver)
+    ).toEqual([0, 1, 2]);
+    fireEvent.click(proxySwitch());
+    const saved = await save(onSubmit);
+    expect(
+      saved.protocols.map((protocol: API.Protocol) => protocol.reality_xver)
+    ).toEqual([0, 1, 2]);
+    expect(saved.protocols[1].accept_proxy_protocol).toBe(false);
+    expect({
+      ...saved,
+      protocols: saved.protocols.map((protocol: API.Protocol) => ({
+        ...protocol,
+        accept_proxy_protocol: true,
+      })),
+    }).toEqual(original);
+  });
+});
+
 describe("server form PROXY protocol save/reopen", () => {
   it("loads an omitted legacy value as off, saves false, and can enable it", async () => {
     const { onSubmit, unmount } = openForm();
     expect(proxySwitch().getAttribute("aria-checked")).toBe("false");
     expect(
-      screen.getByText(/previous hop.*must send PROXY protocol headers/)
-    ).toBeTruthy();
+      screen.queryByText(/previous hop.*must send PROXY protocol headers/)
+    ).toBeNull();
+    expect(
+      proxySwitch()
+        .closest('[data-slot="form-item"]')
+        ?.querySelector('[data-slot="form-description"]')
+    ).toBeNull();
     const original = await save(onSubmit);
     expect(original.protocols[0].accept_proxy_protocol).toBe(false);
     expect(original.protocols[0]).toMatchObject(server.protocols![0]!);

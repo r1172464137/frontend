@@ -1,6 +1,5 @@
 {
   "accept_proxy_protocol": "接收 PROXY protocol",
-  "accept_proxy_protocol_desc": "上一跳（例如 nginx）必须发送 PROXY protocol 头；不携带此头的直连将失败。不支持 gRPC 或 XHTTP。",
   "actions": {
     "cancel": "取消",
     "save": "保存"
@@ -94,6 +93,10 @@
   "protocol_configurations_desc": "启用并配置所需的协议类型",
   "protocols": "协议",
   "reality": "Reality",
+  "reality_xver": "向目标发送 PROXY protocol",
+  "reality_xver_none": "不发送",
+  "reality_xver_v1": "PROXY v1",
+  "reality_xver_v2": "PROXY v2",
   "reduce_rtt": "减少 RTT",
   "routing": "路由",
   "security": "安全",

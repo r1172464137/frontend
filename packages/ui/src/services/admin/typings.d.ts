@@ -1409,6 +1409,8 @@ it was recorded. */
     reality_server_port: number;
     /** VLESS/VMess REALITY only: the short ID clients may use. */
     reality_short_id: string;
+    /** REALITY target connection: 0 sends no PROXY header (default), 1 sends v1, 2 sends v2. Independent of listener reception. */
+    reality_xver?: 0 | 1 | 2;
     /** TUIC only: enables QUIC 0-RTT to save round trips on the first handshake. */
     reduce_rtt: boolean;
     /** TLS/REALITY protocols: none, tls or reality; each protocol limits the values it accepts. */

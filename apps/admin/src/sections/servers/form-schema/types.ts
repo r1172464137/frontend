@@ -11,10 +11,11 @@ export type FieldConfig = {
     | "string-list"
     | "json";
   label: string;
-  description?: string;
   required?: boolean;
   placeholder?: string;
   options?: readonly string[];
+  optionLabels?: Record<string, string>;
+  valueType?: "number";
   defaultValue?: any;
   min?: number;
   max?: number;

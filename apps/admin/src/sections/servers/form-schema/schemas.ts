@@ -94,6 +94,10 @@ const fingerprint = {
   fingerprint: z.enum(FINGERPRINTS).nullish(),
 };
 
+const realityProxyProtocol = {
+  reality_xver: z.union([z.literal(0), z.literal(1), z.literal(2)]).default(0),
+};
+
 const reality = {
   reality_server_addr: nullableString,
   reality_server_port: nullablePort,
@@ -127,6 +131,7 @@ const vmess = z.object({
   ...reality,
   ...ech,
   ...fingerprint,
+  ...realityProxyProtocol,
   type: z.literal("vmess"),
   security: z.enum(SECURITY.vmess).nullish(),
 });
@@ -138,6 +143,7 @@ const vless = z.object({
   ...reality,
   ...ech,
   ...fingerprint,
+  ...realityProxyProtocol,
   type: z.literal("vless"),
   security: z.enum(SECURITY.vless).nullish(),
   flow: z.enum(FLOWS.vless).nullish(),
@@ -158,6 +164,7 @@ const trojan = z.object({
   ...reality,
   ...ech,
   ...fingerprint,
+  ...realityProxyProtocol,
   type: z.literal("trojan"),
   security: z.enum(SECURITY.trojan).nullish(),
 });

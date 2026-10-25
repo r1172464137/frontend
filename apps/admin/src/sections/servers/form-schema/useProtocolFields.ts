@@ -144,10 +144,6 @@ export function useProtocolFields() {
       name: "accept_proxy_protocol",
       type: "switch",
       label: t("accept_proxy_protocol", "Accept PROXY protocol"),
-      description: t(
-        "accept_proxy_protocol_desc",
-        "The previous hop (e.g. nginx) must send PROXY protocol headers. Direct connections without these headers will fail. Not supported on gRPC or XHTTP."
-      ),
       defaultValue: false,
       group: "transport",
       condition,
@@ -224,6 +220,21 @@ export function useProtocolFields() {
       },
       multiplex(),
     ];
+    const realityXver = (): FieldConfig => ({
+      name: "reality_xver",
+      type: "select",
+      label: t("reality_xver", "Send PROXY protocol to target"),
+      options: ["0", "1", "2"],
+      optionLabels: {
+        "0": t("reality_xver_none", "Do not send"),
+        "1": t("reality_xver_v1", "PROXY v1"),
+        "2": t("reality_xver_v2", "PROXY v2"),
+      },
+      valueType: "number",
+      defaultValue: 0,
+      group: "reality",
+      condition: (protocol) => protocol.security === "reality",
+    });
     const realityFields = (): FieldConfig[] => [
       {
         name: "sni",
@@ -408,6 +419,7 @@ export function useProtocolFields() {
         ...certificateFields((protocol) => protocol.security === "tls"),
         ...echFields(),
         ...realityFields(),
+        realityXver(),
       ],
       vless: [
         ratio(),
@@ -429,6 +441,7 @@ export function useProtocolFields() {
         ...certificateFields((protocol) => protocol.security === "tls"),
         ...echFields(),
         ...realityFields(),
+        realityXver(),
         {
           name: "encryption",
           type: "select",
@@ -527,6 +540,7 @@ export function useProtocolFields() {
         ...certificateFields((protocol) => protocol.security === "tls"),
         ...echFields(),
         ...realityFields(),
+        realityXver(),
       ],
       hysteria2: [
         ratio(),

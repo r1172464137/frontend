@@ -74,6 +74,7 @@ export function getProtocolDefaultConfig(proto: ProtocolType) {
         ...fingerprint,
         type: "vmess",
         security: "none",
+        reality_xver: 0,
       } as any;
     case "vless":
       return {
@@ -85,6 +86,7 @@ export function getProtocolDefaultConfig(proto: ProtocolType) {
         ...fingerprint,
         type: "vless",
         security: "none",
+        reality_xver: 0,
         flow: "none",
         encryption: "none",
         encryption_mode: null,
@@ -105,6 +107,7 @@ export function getProtocolDefaultConfig(proto: ProtocolType) {
         ...fingerprint,
         type: "trojan",
         security: "tls",
+        reality_xver: 0,
         cert_mode: "self",
       } as any;
     case "hysteria2":

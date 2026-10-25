@@ -1,6 +1,5 @@
 {
   "accept_proxy_protocol": "Accept PROXY protocol",
-  "accept_proxy_protocol_desc": "The previous hop (e.g. nginx) must send PROXY protocol headers. Direct connections without these headers will fail. Not supported on gRPC or XHTTP.",
   "actions": {
     "cancel": "Cancel",
     "save": "Save"
@@ -94,6 +93,10 @@
   "protocol_configurations_desc": "Enable and configure the required protocol types",
   "protocols": "Protocols",
   "reality": "Reality",
+  "reality_xver": "Send PROXY protocol to target",
+  "reality_xver_none": "Do not send",
+  "reality_xver_v1": "PROXY v1",
+  "reality_xver_v2": "PROXY v2",
   "reduce_rtt": "Reduce RTT",
   "routing": "Routing",
   "security": "Security",
