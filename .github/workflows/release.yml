@@ -109,4 +109,4 @@ jobs:
             | `ppanel-user-web.tar.gz` / `.zip` | Same-origin `/v1/` and `/v2/` |
             | `*-with-api.tar.gz` | Same-origin `/api/v1/` and `/api/v2/`; strip `/api` at the reverse proxy |
 
-            All archives contain `index.html` at their root. `SHA256SUMS` covers every archive. Keep admin and user in separate static directories; the admin bundle may be served under a subdirectory such as `/69097zrm/`.
+            All archives contain `index.html` at their root. `SHA256SUMS` covers every archive. Keep admin and user in separate static directories; the admin bundle may be served under a subdirectory such as `/admin/`.
