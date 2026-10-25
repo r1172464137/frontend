@@ -19,6 +19,13 @@ This document records all notable changes to ShadCN Admin.
 ---
 
 
+## [1.22.2](https://github.com/r1172464137/frontend/releases/tag/v1.22.2) (2026-10-25)
+
+### 🐛 Bug Fixes / 问题修复
+
+- Generate node installation commands from the fork's pinned `v1.1.14` Release, retaining `reality_xver` support on new installations.
+- Quote API host, server ID, and node secret as literal shell arguments; download the installer in a cleaned temporary directory rather than overwriting a local file.
+
 ## [1.22.1](https://github.com/r1172464137/frontend/releases/tag/v1.22.1) (2026-10-25)
 
 ### ✨ Features / 新功能

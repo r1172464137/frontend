@@ -23,6 +23,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { buildServerInstallCommand } from "./server-install-command";
 
 type Props = {
   server: API.Server;
@@ -50,10 +51,15 @@ export default function ServerInstall({ server, trigger }: Props) {
     }
   }, [open]);
 
-  const installCommand = useMemo(() => {
-    const secret = cfgResp?.node_secret ?? "";
-    return `wget -N https://raw.githubusercontent.com/perfect-panel/ppanel-node/master/scripts/install.sh && bash install.sh --api-host ${domain} --server-id ${server.id} --secret-key ${secret}`;
-  }, [domain, server.id, cfgResp?.node_secret]);
+  const installCommand = useMemo(
+    () =>
+      buildServerInstallCommand({
+        apiHost: domain,
+        serverId: server.id,
+        secret: cfgResp?.node_secret ?? "",
+      }),
+    [domain, server.id, cfgResp?.node_secret]
+  );
 
   async function handleCopy() {
     try {
