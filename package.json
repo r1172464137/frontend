@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "1.22.1-dev.1",
+  "version": "1.22.1",
   "private": true,
   "homepage": "https://github.com/perfect-panel/frontend",
   "bugs": {
@@ -24,7 +24,8 @@
     "i18n:sync": "turbo i18n:sync",
     "i18n:status": "turbo i18n:status",
     "prepare": "husky && npx gitmoji -i",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "release:build": "bash scripts/build-release.sh"
   },
   "overrides": {
     "react": "^19.2.0",

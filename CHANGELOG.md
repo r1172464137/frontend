@@ -19,6 +19,18 @@ This document records all notable changes to ShadCN Admin.
 ---
 
 
+## [1.22.1](https://github.com/r1172464137/frontend/releases/tag/v1.22.1) (2026-10-25)
+
+### ✨ Features / 新功能
+
+- Expose `accept_proxy_protocol` for node transports that support reception, preserving boolean values on save and reopen.
+- Add the REALITY target PROXY selector `reality_xver` with numeric values 0/1/2 and an unchanged default of 0. Use backend v1.20.4 and ppnode v1.1.14 from the matching forks.
+- Keep the native PPanel form layout and remove the reception explanatory paragraph in Chinese and English.
+
+### 👷 CI/CD
+
+- Publish the admin and user applications as normal/API-prefixed tarballs and normal ZIP archives, with `SHA256SUMS`, using the fork's built-in GitHub token.
+
 ## [1.22.1-dev.1](https://github.com/perfect-panel/frontend/compare/v1.22.0...v1.22.1-dev.1) (2026-10-18)
 
 ### 🐛 Bug Fixes / 问题修复
