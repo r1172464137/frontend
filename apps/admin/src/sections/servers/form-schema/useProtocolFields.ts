@@ -140,6 +140,18 @@ export function useProtocolFields() {
           condition(protocol) && protocol.cert_mode === "dns",
       },
     ];
+    const acceptProxyProtocol = (condition: Condition): FieldConfig => ({
+      name: "accept_proxy_protocol",
+      type: "switch",
+      label: t("accept_proxy_protocol", "Accept PROXY protocol"),
+      description: t(
+        "accept_proxy_protocol_desc",
+        "The previous hop (e.g. nginx) must send PROXY protocol headers. Direct connections without these headers will fail. Not supported on gRPC or XHTTP."
+      ),
+      defaultValue: false,
+      group: "transport",
+      condition,
+    });
     const streamFields = (transports: readonly string[]): FieldConfig[] => [
       {
         name: "transport",
@@ -150,6 +162,10 @@ export function useProtocolFields() {
         defaultValue: "tcp",
         group: "transport",
       },
+      // Matches ppnode's buildTransportSetting; gRPC/XHTTP do not read it.
+      acceptProxyProtocol((protocol) =>
+        ["tcp", "ws", "websocket", "httpupgrade"].includes(protocol.transport)
+      ),
       {
         name: "host",
         type: "input",
@@ -379,6 +395,8 @@ export function useProtocolFields() {
           condition: (protocol) =>
             Boolean(protocol.plugin && protocol.plugin !== "none"),
         },
+        // Only legacy HTTP obfs creates TCPSettings in ppnode's SS inbound.
+        acceptProxyProtocol((protocol) => protocol.obfs === "http"),
         ...certificateFields(shadowsocksPluginUsesTLS),
       ],
       vmess: [

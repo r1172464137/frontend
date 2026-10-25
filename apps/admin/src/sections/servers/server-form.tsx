@@ -18,6 +18,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -113,6 +114,8 @@ function normalizeMultiplexValue(
 }
 
 const PRESERVED_HIDDEN_PROTOCOL_FIELDS = new Set([
+  // A transport change hides the control but must not reset its stored value.
+  "accept_proxy_protocol",
   "server_key",
   "reality_private_key",
   "reality_public_key",
@@ -339,14 +342,18 @@ function DynamicField({
           render={({ field: fieldProps }) => (
             <FormItem>
               <FormLabel>{getFieldLabel(field)}</FormLabel>
-              <FormControl>
-                <div className="pt-2">
+              <div className="pt-2">
+                <FormControl>
                   <Switch
                     checked={!!fieldProps.value}
+                    name={fieldName}
                     onCheckedChange={(checked) => fieldProps.onChange(checked)}
                   />
-                </div>
-              </FormControl>
+                </FormControl>
+              </div>
+              {field.description ? (
+                <FormDescription>{field.description}</FormDescription>
+              ) : null}
               <FormMessage />
             </FormItem>
           )}

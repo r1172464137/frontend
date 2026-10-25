@@ -1,4 +1,6 @@
 {
+  "accept_proxy_protocol": "接收 PROXY protocol",
+  "accept_proxy_protocol_desc": "上一跳（例如 nginx）必须发送 PROXY protocol 头；不携带此头的直连将失败。不支持 gRPC 或 XHTTP。",
   "actions": {
     "cancel": "取消",
     "save": "保存"

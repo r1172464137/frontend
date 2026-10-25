@@ -15,7 +15,12 @@ const certificate = {
   cert_dns_env: null,
 };
 
+const proxyProtocol = {
+  accept_proxy_protocol: false,
+};
+
 const stream = {
+  ...proxyProtocol,
   host: null,
   transport: "tcp",
   path: null,
@@ -49,6 +54,7 @@ export function getProtocolDefaultConfig(proto: ProtocolType) {
       return {
         ...base,
         ...certificate,
+        ...proxyProtocol,
         type: "shadowsocks",
         cipher: "chacha20-ietf-poly1305",
         server_key: null,

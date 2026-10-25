@@ -68,7 +68,12 @@ const certificate = {
   cert_dns_env: nullableString,
 };
 
+const proxyProtocol = {
+  accept_proxy_protocol: z.boolean().default(false),
+};
+
 const stream = {
+  ...proxyProtocol,
   host: nullableString,
   transport: nullableString,
   path: nullableString,
@@ -99,6 +104,11 @@ const reality = {
 
 const shadowsocks = z.object({
   ...common,
+  ...proxyProtocol,
+  // ppnode only receives PROXY headers on the legacy HTTP-obfs TCP path.
+  obfs: nullableString,
+  obfs_host: nullableString,
+  obfs_path: nullableString,
   type: z.literal("shadowsocks"),
   cipher: z.enum(SS_CIPHERS).nullish(),
   server_key: nullableString,

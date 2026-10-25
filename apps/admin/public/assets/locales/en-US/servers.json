@@ -1,4 +1,6 @@
 {
+  "accept_proxy_protocol": "Accept PROXY protocol",
+  "accept_proxy_protocol_desc": "The previous hop (e.g. nginx) must send PROXY protocol headers. Direct connections without these headers will fail. Not supported on gRPC or XHTTP.",
   "actions": {
     "cancel": "Cancel",
     "save": "Save"
