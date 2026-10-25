@@ -277,6 +277,8 @@ describe("REALITY target PROXY protocol field", () => {
   });
 });
 
+// Hosted 2-CPU CI exceeded 5s on the first cold render/save/reopen (run 40196978455).
+// Bound each real-form case to 15s without changing assertions or global timeouts.
 describe.each(
   realityTypes
 )("%s REALITY xver real form submit/reopen", (type) => {
@@ -362,7 +364,7 @@ describe.each(
     changeSelect("Security", "reality");
     expect(xverSelect().textContent).toBe("PROXY v2");
   });
-});
+}, 15_000);
 
 describe("per-protocol REALITY xver independence", () => {
   it("keeps distinct 0/1/2 values in one server and does not couple sending to reception", async () => {
