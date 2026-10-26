@@ -7,13 +7,20 @@ import remarkToc from "remark-toc";
 import type { MarkdownProps } from "./markdown";
 import { appUrlTransform, markdownComponents } from "./markdown-elements";
 
-export default function MarkdownImpl({ children, components }: MarkdownProps) {
+export default function MarkdownImpl({
+  allowRawHtml,
+  children,
+  components,
+}: MarkdownProps) {
+  const rawHtmlEnabled = allowRawHtml !== false;
+
   return (
     <div className="prose dark:prose-invert wrap-break-word w-full max-w-[unset]">
       <ReactMarkdown
         components={{ ...markdownComponents, ...components }}
-        rehypePlugins={[rehypeRaw]}
+        rehypePlugins={rawHtmlEnabled ? [rehypeRaw] : []}
         remarkPlugins={[remarkGfm, remarkToc]}
+        skipHtml={!rawHtmlEnabled}
         urlTransform={appUrlTransform}
       >
         {children}

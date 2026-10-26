@@ -53,6 +53,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useGlobalStore } from "@/stores/global";
 import { useNode } from "@/stores/node";
+import { PRODUCT_FEATURE_ICON_SCHEMA } from "./product-icon-options";
 
 interface SubscribeFormProps<T> {
   onSubmit: (data: T) => Promise<boolean> | boolean;
@@ -518,18 +519,7 @@ export default function SubscribeForm<T extends Record<string, any>>({
                                     items: {
                                       type: "object",
                                       properties: {
-                                        icon: {
-                                          type: "string",
-                                          description:
-                                            "Enter an Iconify icon identifier (e.g., 'mdi:account').",
-                                          pattern: "^[a-z0-9]+:[a-z0-9-]+$",
-                                          examples: [
-                                            "uil:shield-check",
-                                            "uil:shield-exclamation",
-                                            "uil:database",
-                                            "uil:server",
-                                          ],
-                                        },
+                                        icon: PRODUCT_FEATURE_ICON_SCHEMA,
                                         label: {
                                           type: "string",
                                           description:

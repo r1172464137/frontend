@@ -75,9 +75,12 @@ function CodeBlock({ className, children, ...props }: CodeBlockProps) {
 }
 
 export default function RichMarkdownImpl({
+  allowRawHtml,
   children,
   components,
 }: MarkdownProps) {
+  const rawHtmlEnabled = allowRawHtml !== false;
+
   return (
     <div className="prose dark:prose-invert wrap-break-word w-full max-w-[unset]">
       <ReactMarkdown
@@ -88,8 +91,11 @@ export default function RichMarkdownImpl({
           },
           ...components,
         }}
-        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        rehypePlugins={
+          rawHtmlEnabled ? [rehypeRaw, rehypeKatex] : [rehypeKatex]
+        }
         remarkPlugins={[remarkGfm, remarkToc, remarkMath]}
+        skipHtml={!rawHtmlEnabled}
         urlTransform={appUrlTransform}
       >
         {children}

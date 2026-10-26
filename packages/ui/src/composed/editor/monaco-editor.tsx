@@ -1,14 +1,23 @@
 "use client";
 
-import { Editor, type Monaco, type OnMount } from "@monaco-editor/react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import { useSize } from "ahooks";
 import { EyeIcon, EyeOff, FullscreenIcon, MinimizeIcon } from "lucide-react";
+import type { editor } from "monaco-editor";
 import DraculaTheme from "monaco-themes/themes/Dracula.json" with {
   type: "json",
 };
 import { useEffect, useRef, useState } from "react";
+import { getMonaco } from "./monaco-runtime.js";
+
+const monaco = getMonaco();
+
+export type Monaco = typeof import("monaco-editor");
+export type OnMount = (
+  editorInstance: editor.IStandaloneCodeEditor,
+  monacoInstance: Monaco
+) => void;
 
 export interface MonacoEditorProps {
   value?: string;
@@ -33,6 +42,127 @@ function debounce<T extends (...args: any[]) => void>(func: T, delay: number) {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => func(...args), delay);
   };
+}
+
+interface LocalMonacoEditorProps {
+  beforeMount?: (monacoInstance: Monaco) => void;
+  className?: string;
+  language: string;
+  onBlur?: (value: string) => void;
+  onChange?: (value: string) => void;
+  onMount?: OnMount;
+  options: editor.IStandaloneEditorConstructionOptions;
+  theme: string;
+  value?: string;
+}
+
+function LocalMonacoEditor({
+  beforeMount,
+  className,
+  language,
+  onBlur,
+  onChange,
+  onMount,
+  options,
+  theme,
+  value,
+}: LocalMonacoEditorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const applyingValueRef = useRef(false);
+  const beforeMountRef = useRef(beforeMount);
+  const onBlurRef = useRef(onBlur);
+  const onChangeRef = useRef(onChange);
+  const onMountRef = useRef(onMount);
+  const optionsRef = useRef(options);
+
+  beforeMountRef.current = beforeMount;
+  onBlurRef.current = onBlur;
+  onChangeRef.current = onChange;
+  onMountRef.current = onMount;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    beforeMountRef.current?.(monaco);
+    const editorInstance = monaco.editor.create(container, {
+      ...optionsRef.current,
+      language,
+      theme,
+      value: value ?? "",
+    });
+    editorRef.current = editorInstance;
+
+    const changeSubscription = editorInstance.onDidChangeModelContent(() => {
+      if (!applyingValueRef.current) {
+        onChangeRef.current?.(editorInstance.getValue());
+      }
+    });
+    const blurSubscription = editorInstance.onDidBlurEditorWidget(() => {
+      onBlurRef.current?.(editorInstance.getValue());
+    });
+    onMountRef.current?.(editorInstance, monaco);
+
+    return () => {
+      changeSubscription.dispose();
+      blurSubscription.dispose();
+      const model = editorInstance.getModel();
+      editorInstance.dispose();
+      model?.dispose();
+      editorRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const editorInstance = editorRef.current;
+    if (!(editorInstance && value !== undefined)) {
+      return;
+    }
+    if (editorInstance.getValue() === value) {
+      return;
+    }
+
+    applyingValueRef.current = true;
+    try {
+      if (editorInstance.getOption(monaco.editor.EditorOption.readOnly)) {
+        editorInstance.setValue(value);
+      } else {
+        const model = editorInstance.getModel();
+        if (model) {
+          editorInstance.executeEdits("", [
+            {
+              forceMoveMarkers: true,
+              range: model.getFullModelRange(),
+              text: value,
+            },
+          ]);
+          editorInstance.pushUndoStop();
+        }
+      }
+    } finally {
+      applyingValueRef.current = false;
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const model = editorRef.current?.getModel();
+    if (model) {
+      monaco.editor.setModelLanguage(model, language);
+    }
+  }, [language]);
+
+  useEffect(() => {
+    editorRef.current?.updateOptions(options);
+  }, [options]);
+
+  useEffect(() => {
+    monaco.editor.setTheme(theme);
+  }, [theme]);
+
+  return <div className={cn("size-full", className)} ref={containerRef} />;
 }
 
 export function MonacoEditor({
@@ -74,20 +204,8 @@ export function MonacoEditor({
     }, 300)
   ).current;
 
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
-    if (onMount) onMount(editor, monaco);
-
-    editor.onDidChangeModelContent(() => {
-      const newValue = editor.getValue();
-      setInternalValue(newValue);
-      debouncedOnChange(newValue);
-    });
-
-    editor.onDidBlurEditorWidget(() => {
-      if (onBlur) {
-        onBlur(editor.getValue());
-      }
-    });
+  const handleEditorDidMount: OnMount = (editorInstance, monacoInstance) => {
+    onMount?.(editorInstance, monacoInstance);
   };
 
   const toggleFullscreen = () => setIsFullscreen(!isFullscreen);
@@ -143,9 +261,9 @@ export function MonacoEditor({
                 "w-1/2": isPreviewVisible,
               })}
             >
-              <Editor
-                beforeMount={(monaco: Monaco) => {
-                  monaco.editor.defineTheme("transparentTheme", {
+              <LocalMonacoEditor
+                beforeMount={(monacoInstance) => {
+                  monacoInstance.editor.defineTheme("transparentTheme", {
                     base: DraculaTheme.base as "vs" | "vs-dark" | "hc-black",
                     inherit: DraculaTheme.inherit,
                     rules: DraculaTheme.rules,
@@ -154,12 +272,10 @@ export function MonacoEditor({
                       "editor.background": "#00000000",
                     },
                   });
-                  if (beforeMount) {
-                    beforeMount(monaco);
-                  }
+                  beforeMount?.(monacoInstance);
                 }}
-                className=""
                 language={language}
+                onBlur={onBlur}
                 onChange={(newValue) => {
                   setInternalValue(newValue);
                   debouncedOnChange(newValue);
@@ -176,6 +292,7 @@ export function MonacoEditor({
                   lineNumbers: showLineNumbers ? "on" : "off",
                   minimap: { enabled: false },
                   overviewRulerLanes: 0,
+                  readOnly,
                   renderLineHighlight: "none",
                   scrollBeyondLastLine: false,
                   scrollbar: {
@@ -184,7 +301,6 @@ export function MonacoEditor({
                   },
                   tabSize: 2,
                   wordWrap: "off",
-                  readOnly,
                 }}
                 theme="transparentTheme"
                 value={internalValue}

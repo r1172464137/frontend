@@ -1,20 +1,23 @@
-import type { IconifyIcon } from "@iconify/react";
+import type { IconifyIcon } from "@iconify/react/offline";
 import AccessTime from "@iconify-icons/mdi/access-time";
 import Account from "@iconify-icons/mdi/account";
 import AccountMultiplePlusOutline from "@iconify-icons/mdi/account-multiple-plus-outline";
 import AccountPlusOutline from "@iconify-icons/mdi/account-plus-outline";
+import AlertCircleOutline from "@iconify-icons/mdi/alert-circle-outline";
 import Apple from "@iconify-icons/mdi/apple";
 import Cancel from "@iconify-icons/mdi/cancel";
 import ChevronDown from "@iconify-icons/mdi/chevron-down";
 import ChevronRight from "@iconify-icons/mdi/chevron-right";
 import ClockTimeEight from "@iconify-icons/mdi/clock-time-eight";
 import Cog from "@iconify-icons/mdi/cog";
+import ConsoleLine from "@iconify-icons/mdi/console-line";
 import ContentCopy from "@iconify-icons/mdi/content-copy";
 import CurrencyUsd from "@iconify-icons/mdi/currency-usd";
 import DatabasePlus from "@iconify-icons/mdi/database-plus";
 import DeleteSweep from "@iconify-icons/mdi/delete-sweep";
 import Devices from "@iconify-icons/mdi/devices";
 import DiceMultiple from "@iconify-icons/mdi/dice-multiple";
+import DotsHorizontal from "@iconify-icons/mdi/dots-horizontal";
 import Download from "@iconify-icons/mdi/download";
 import EmailMultiple from "@iconify-icons/mdi/email-multiple";
 import EmailOutline from "@iconify-icons/mdi/email-outline";
@@ -31,14 +34,18 @@ import Loading from "@iconify-icons/mdi/loading";
 import MessageTextClockOutline from "@iconify-icons/mdi/message-text-clock-outline";
 import MicrosoftWindows from "@iconify-icons/mdi/microsoft-windows";
 import OpenInNew from "@iconify-icons/mdi/open-in-new";
+import PencilOutline from "@iconify-icons/mdi/pencil-outline";
 import PhoneSettings from "@iconify-icons/mdi/phone-settings";
+import Refresh from "@iconify-icons/mdi/refresh";
 import ResistorNodes from "@iconify-icons/mdi/resistor-nodes";
 import Server from "@iconify-icons/mdi/server";
 import ShieldAccountOutline from "@iconify-icons/mdi/shield-account-outline";
 import ShieldCheckOutline from "@iconify-icons/mdi/shield-check-outline";
+import SourceBranchSync from "@iconify-icons/mdi/source-branch-sync";
 import SuccessCircleOutline from "@iconify-icons/mdi/success-circle-outline";
 import Telegram from "@iconify-icons/mdi/telegram";
 import Telephone from "@iconify-icons/mdi/telephone";
+import TrashCanOutline from "@iconify-icons/mdi/trash-can-outline";
 import TuneVariant from "@iconify-icons/mdi/tune-variant";
 import Web from "@iconify-icons/mdi/web";
 
@@ -47,18 +54,21 @@ export const icons: Readonly<Record<string, IconifyIcon>> = {
   account: Account,
   "account-multiple-plus-outline": AccountMultiplePlusOutline,
   "account-plus-outline": AccountPlusOutline,
+  "alert-circle-outline": AlertCircleOutline,
   apple: Apple,
   cancel: Cancel,
   "chevron-down": ChevronDown,
   "chevron-right": ChevronRight,
   "clock-time-eight": ClockTimeEight,
   cog: Cog,
+  "console-line": ConsoleLine,
   "content-copy": ContentCopy,
   "currency-usd": CurrencyUsd,
   "database-plus": DatabasePlus,
   "delete-sweep": DeleteSweep,
   devices: Devices,
   "dice-multiple": DiceMultiple,
+  "dots-horizontal": DotsHorizontal,
   download: Download,
   "email-multiple": EmailMultiple,
   "email-outline": EmailOutline,
@@ -75,14 +85,18 @@ export const icons: Readonly<Record<string, IconifyIcon>> = {
   "message-text-clock-outline": MessageTextClockOutline,
   "microsoft-windows": MicrosoftWindows,
   "open-in-new": OpenInNew,
+  "pencil-outline": PencilOutline,
   "phone-settings": PhoneSettings,
+  refresh: Refresh,
   "resistor-nodes": ResistorNodes,
   server: Server,
   "shield-account-outline": ShieldAccountOutline,
   "shield-check-outline": ShieldCheckOutline,
+  "source-branch-sync": SourceBranchSync,
   "success-circle-outline": SuccessCircleOutline,
   telegram: Telegram,
   telephone: Telephone,
+  "trash-can-outline": TrashCanOutline,
   "tune-variant": TuneVariant,
   web: Web,
 };

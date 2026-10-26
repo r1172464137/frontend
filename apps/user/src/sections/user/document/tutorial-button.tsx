@@ -7,7 +7,6 @@ import {
   AvatarImage,
 } from "@workspace/ui/components/avatar";
 import { buttonVariants } from "@workspace/ui/components/button";
-import { Markdown } from "@workspace/ui/composed/markdown";
 import { useOutsideClick } from "@workspace/ui/hooks/use-outside-click";
 import { cn } from "@workspace/ui/lib/utils";
 import { formatDate } from "@workspace/ui/utils/formatting";
@@ -16,6 +15,7 @@ import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getTutorial } from "@/sections/user/document/tutorial";
 import { CloseIcon } from "./close-icon";
+import { TutorialMarkdown } from "./tutorial-markdown";
 
 interface Item {
   path: string;
@@ -98,21 +98,7 @@ export function TutorialButton({ items }: { items: Item[] }) {
               layoutId={`card-${active.title}-${id}`}
               ref={ref}
             >
-              <Markdown
-                components={{
-                  img: ({ node, className, ...props }: any) => (
-                    <img
-                      {...props}
-                      alt=""
-                      className="my-4 inline-block size-auto max-h-96"
-                      height={384}
-                      width={800}
-                    />
-                  ),
-                }}
-              >
-                {data?.content || ""}
-              </Markdown>
+              <TutorialMarkdown>{data?.content || ""}</TutorialMarkdown>
             </motion.div>
           </div>
         ) : null}
@@ -128,7 +114,9 @@ export function TutorialButton({ items }: { items: Item[] }) {
             <div className="flex flex-row items-center gap-4">
               <motion.div layoutId={`image-${item.title}-${id}`}>
                 <Avatar className="size-12">
-                  <AvatarImage alt={item.title ?? ""} src={item.icon ?? ""} />
+                  {item.icon && (
+                    <AvatarImage alt={item.title ?? ""} src={item.icon} />
+                  )}
                   <AvatarFallback className="bg-primary/80 text-white">
                     {item.title.split("")[0]}
                   </AvatarFallback>

@@ -1,4 +1,4 @@
-import type { IconifyIcon } from "@iconify/react";
+import type { IconifyIcon } from "@iconify/react/offline";
 import Apple from "@iconify-icons/logos/apple";
 import Facebook from "@iconify-icons/logos/facebook";
 import Github from "@iconify-icons/logos/github";

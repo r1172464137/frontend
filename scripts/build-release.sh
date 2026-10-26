@@ -25,6 +25,8 @@ fs.writeFileSync(path.join(process.env.DIST, 'deployment-info.json'), JSON.strin
   api_prefix: process.env.PREFIX,
 }, null, 2) + '\n')
 JS
+        # Scan this exact build candidate before creating any archive from it.
+        node "$ROOT/scripts/check-release-dist.mjs" "$DIST"
         SUFFIX=''; [ -z "$PREFIX" ] || SUFFIX='-with-api'
         ARCHIVE="$OUT/ppanel-$APP-web$SUFFIX.tar.gz"
         tar -czf "$ARCHIVE" -C "$DIST" .

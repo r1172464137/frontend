@@ -17,6 +17,8 @@ VITE_API_PREFIX=
 
 `VITE_API_PREFIX` 仍可用于自定义反向代理。如果设置为 `/api`，代理必须把 `/api/v1/...` 转发成 `/v1/...`，把 `/api/v2/...` 转发成 `/v2/...`；这不需要旧网关服务。Vite 开发代理会去掉该前缀，未配置 API 地址时默认连接 `http://127.0.0.1:8080`。
 
+普通发布包仍使用 `VITE_API_BASE_URL=` 和 `VITE_API_PREFIX=`。既有的 `*-with-api.tar.gz` 发布包也继续提供，其配置为 `VITE_API_BASE_URL=`、`VITE_API_PREFIX=/api`，但不会内置后端地址。运维人员必须显式配置自有的反向代理并去掉 `/api` 前缀；发布包不会回退到供应商 API。
+
 这些配置在构建时生效，修改后需要重新构建并部署管理端和用户端。旧网关部署还需设置后端的 `Host`、`Port`，并更新代理的上游地址；后端不再向网关注册地址，也不再读取 `PPANEL_PORT`。
 
 ## 概述
@@ -110,12 +112,6 @@ pnpm install
 # 后端 API 地址（必需）
 VITE_API_BASE_URL=https://api.your-domain.com
 
-# CDN 地址（可选，用于加速静态资源）
-VITE_CDN_URL=https://cdn.jsdmirror.com
-
-# 启用教程文档（可选）
-VITE_TUTORIAL_DOCUMENT=true
-
 # 开发环境默认登录凭证（生产环境请留空）
 VITE_USER_EMAIL=
 VITE_USER_PASSWORD=
@@ -127,11 +123,8 @@ VITE_USER_PASSWORD=
 # 后端 API 地址（必需）
 VITE_API_BASE_URL=https://api.your-domain.com
 
-# CDN 地址（可选）
-VITE_CDN_URL=https://cdn.jsdmirror.com
-
-# 启用教程文档（可选）
-VITE_TUTORIAL_DOCUMENT=true
+# 用户教程：默认关闭；true 使用 ./assets/tutorial
+VITE_TUTORIAL_DOCUMENT=false
 
 # 显示落地页（可选，设为 false 则直接跳转登录页）
 VITE_SHOW_LANDING_PAGE=true
@@ -139,6 +132,22 @@ VITE_SHOW_LANDING_PAGE=true
 # 开发环境默认登录凭证（生产环境请留空）
 VITE_USER_EMAIL=
 VITE_USER_PASSWORD=
+```
+
+教程仅供用户端使用。仓库不内置教程快照，因此默认关闭。设置
+`VITE_TUTORIAL_DOCUMENT=true` 前，请将经过审核的 `SUMMARY.md`、Markdown
+文件及其引用的资源放入 `apps/user/public/assets/tutorial`。也可以将该变量
+设置为 `/assets/tutorial` 之类的同源根路径；绝对 URL 和路径穿越会被拒绝。
+后端的 `show_tutorial` 也必须开启；当其为 false 时，用户端不会加载教程
+索引或教程 UI 代码。必需的 `SUMMARY.md` 可以使用以下最小语言导航格式
+（所有链接路径必须是相对路径）：
+
+```markdown
+## en-US
+* [Getting started](en-US/getting-started.md)
+
+## zh-CN
+* [快速开始](zh-CN/getting-started.md)
 ```
 
 #### 5. 构建应用
@@ -190,9 +199,7 @@ bun run serve  # 或 npm run serve
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?demo-description=PPanel%20is%20a%20pure%2C%20professional%2C%20and%20perfect%20open-source%20proxy%20panel%20tool&demo-image=https%3A%2F%2Furlscan.io%2Fliveshot%2F%3Fwidth%3D1920%26height%3D1080%26url%3Dhttps%3A%2F%2Fuser.ppanel.dev&demo-title=PPanel%20User%20Web&repository-url=https%3A%2F%2Fgithub.com%2Fperfect-panel%2Ffrontend&root-directory=apps%2Fuser)
 
-部署后在 Vercel 控制台配置环境变量：
-- `VITE_API_BASE_URL`: 你的后端 API 地址
-- `VITE_CDN_URL`: CDN 地址（可选）
+部署后，在 Vercel 控制台将 `VITE_API_BASE_URL` 配置为后端 API 地址。
 
 ### 方式三：使用 Netlify 部署
 
@@ -224,9 +231,10 @@ netlify deploy --prod --dir=dist
 
 #### 4. 配置环境变量
 
-在 Netlify 控制台的 Site settings → Build & deploy → Environment 中添加：
-- `VITE_API_BASE_URL`
-- `VITE_CDN_URL`
+在 Netlify 控制台的 Site settings → Build & deploy → Environment 中添加
+`VITE_API_BASE_URL`。
+
+仓库中的 `netlify.toml` 有意不提供 `/api` 代理。部署预构建的 `*-with-api.tar.gz` 时，必须添加运维人员自有的 Netlify Function 或重定向，显式指定后端地址并去掉 `/api` 前缀。未配置站点专用规则时，`/api` 不会转发到任何默认后端。（`VITE_API_BASE_URL` 是构建时配置，无法修改已经构建的发布包。）
 
 ### 方式四：使用 Cloudflare Pages
 
@@ -256,7 +264,8 @@ netlify deploy --prod --dir=dist
 在 Settings → Environment variables 中添加：
 - `API_BASE_URL`：Pages Function 使用的后端 API 源站，例如
   `https://api.your-domain.com`
-- `VITE_CDN_URL`
+
+Pages API 代理必须配置 `API_BASE_URL`。该变量缺失或为空时，Function 会返回 `503 Service Unavailable`，且不会转发请求、请求体或授权头。
 
 ## 自建服务器部署
 
@@ -483,8 +492,7 @@ sudo systemctl enable caddy
 | 变量名 | 说明 | 必需 | 默认值 | 示例 |
 |--------|------|------|--------|------|
 | `VITE_API_BASE_URL` | 后端 API 地址 | ✅ | - | `https://api.your-domain.com` |
-| `VITE_CDN_URL` | CDN 地址 | ❌ | `https://cdn.jsdmirror.com` | `https://cdn.your-domain.com` |
-| `VITE_TUTORIAL_DOCUMENT` | 启用教程文档 | ❌ | `true` | `true` / `false` |
+| `VITE_TUTORIAL_DOCUMENT` | 仅用户端：启用本地教程或设置同源根路径 | ❌ | `false` | `true` / `/assets/tutorial` |
 | `VITE_SHOW_LANDING_PAGE` | 显示落地页 | ❌ | `true` | `true` / `false` |
 | `VITE_USER_EMAIL` | 默认登录邮箱（仅开发） | ❌ | - | - |
 | `VITE_USER_PASSWORD` | 默认登录密码（仅开发） | ❌ | - | - |
@@ -553,10 +561,6 @@ brotli_comp_level 6;
 ### 4. 启用 Service Worker
 
 前端已内置 PWA 支持，构建后自动启用 Service Worker 缓存。
-
-### 5. 使用 CDN 加速
-
-配置 `VITE_CDN_URL` 环境变量，将静态资源加载从 CDN 获取。
 
 ## 故障排查
 

@@ -9,17 +9,24 @@ import {
 } from "@workspace/ui/components/tabs";
 import Empty from "@workspace/ui/composed/empty";
 import { getV1PublicDocumentList as queryDocumentList } from "@workspace/ui/services/user/user";
+import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
+import { TUTORIAL_DOCUMENT } from "@/config";
 import { DocumentButton } from "@/sections/user/document/document-button";
-import { getTutorialList } from "@/sections/user/document/tutorial";
-import { TutorialButton } from "@/sections/user/document/tutorial-button";
 import { useGlobalStore } from "@/stores/global";
+
+const TutorialButton = lazy(() =>
+  import("@/sections/user/document/tutorial-button").then((module) => ({
+    default: module.TutorialButton,
+  }))
+);
 
 export default function Document() {
   const { t, i18n } = useTranslation("document");
   const locale = i18n.language;
   const { common } = useGlobalStore();
-  const showTutorial = common.subscribe?.show_tutorial !== false;
+  const showTutorial =
+    common.subscribe?.show_tutorial === true && TUTORIAL_DOCUMENT !== null;
 
   const { data } = useQuery({
     queryKey: ["queryDocumentList"],
@@ -41,6 +48,9 @@ export default function Document() {
   const { data: TutorialList } = useQuery({
     queryKey: ["getTutorialList", locale],
     queryFn: async () => {
+      const { getTutorialList } = await import(
+        "@/sections/user/document/tutorial"
+      );
       const list = await getTutorialList();
       return list.get(locale);
     },
@@ -101,14 +111,16 @@ export default function Document() {
             </TabsList>
             {TutorialList?.map((tutorial) => (
               <TabsContent key={tutorial.title} value={tutorial.title}>
-                <TutorialButton
-                  items={
-                    tutorial.subItems && tutorial.subItems?.length > 0
-                      ? tutorial.subItems
-                      : [tutorial]
-                  }
-                  key={tutorial.path}
-                />
+                <Suspense fallback={null}>
+                  <TutorialButton
+                    items={
+                      tutorial.subItems && tutorial.subItems?.length > 0
+                        ? tutorial.subItems
+                        : [tutorial]
+                    }
+                    key={tutorial.path}
+                  />
+                </Suspense>
               </TabsContent>
             ))}
           </Tabs>

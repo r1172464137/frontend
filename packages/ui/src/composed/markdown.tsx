@@ -4,6 +4,7 @@ import { lazy, Suspense } from "react";
 import type { Components } from "react-markdown";
 
 export interface MarkdownProps {
+  allowRawHtml?: boolean;
   children: string;
   components?: Components;
   rich?: boolean;

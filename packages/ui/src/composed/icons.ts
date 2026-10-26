@@ -1,19 +1,19 @@
-import type { IconifyIcon } from "@iconify/react";
+import type { IconifyIcon } from "@iconify/react/offline";
 
 const iconGroupLoaders = {
-  "flat-color-icons": () => import("./icons/flat-color-icons"),
-  logos: () => import("./icons/logos"),
-  lucide: () => import("./icons/lucide"),
-  mdi: () => import("./icons/mdi"),
-  "simple-icons": () => import("./icons/simple-icons"),
-  tabler: () => import("./icons/tabler"),
-  uil: () => import("./icons/uil"),
+  "flat-color-icons": () => import("./icons/flat-color-icons.js"),
+  logos: () => import("./icons/logos.js"),
+  lucide: () => import("./icons/lucide.js"),
+  mdi: () => import("./icons/mdi.js"),
+  "simple-icons": () => import("./icons/simple-icons.js"),
+  tabler: () => import("./icons/tabler.js"),
+  uil: () => import("./icons/uil.js"),
 } satisfies Record<
   string,
   () => Promise<{ icons: Readonly<Record<string, IconifyIcon>> }>
 >;
 
-const bundledIconNames = new Set([
+export const BUNDLED_ICON_NAMES = [
   "flat-color-icons:advertising",
   "flat-color-icons:bookmark",
   "flat-color-icons:bullish",
@@ -54,18 +54,21 @@ const bundledIconNames = new Set([
   "mdi:account",
   "mdi:account-multiple-plus-outline",
   "mdi:account-plus-outline",
+  "mdi:alert-circle-outline",
   "mdi:apple",
   "mdi:cancel",
   "mdi:chevron-down",
   "mdi:chevron-right",
   "mdi:clock-time-eight",
   "mdi:cog",
+  "mdi:console-line",
   "mdi:content-copy",
   "mdi:currency-usd",
   "mdi:database-plus",
   "mdi:delete-sweep",
   "mdi:devices",
   "mdi:dice-multiple",
+  "mdi:dots-horizontal",
   "mdi:download",
   "mdi:email-multiple",
   "mdi:email-outline",
@@ -82,14 +85,18 @@ const bundledIconNames = new Set([
   "mdi:message-text-clock-outline",
   "mdi:microsoft-windows",
   "mdi:open-in-new",
+  "mdi:pencil-outline",
   "mdi:phone-settings",
+  "mdi:refresh",
   "mdi:resistor-nodes",
   "mdi:server",
   "mdi:shield-account-outline",
   "mdi:shield-check-outline",
+  "mdi:source-branch-sync",
   "mdi:success-circle-outline",
   "mdi:telegram",
   "mdi:telephone",
+  "mdi:trash-can-outline",
   "mdi:tune-variant",
   "mdi:web",
   "simple-icons:harmonyos",
@@ -133,7 +140,9 @@ const bundledIconNames = new Set([
   "uil:user",
   "uil:users-alt",
   "uil:wallet",
-]);
+] as const;
+
+const bundledIconNames = new Set<string>(BUNDLED_ICON_NAMES);
 
 export function isBundledIcon(name: string) {
   return bundledIconNames.has(name);

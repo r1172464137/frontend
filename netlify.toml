@@ -22,12 +22,8 @@
 [context.user.environment]
   NODE_VERSION = "20"
 
-# 重定向规则
-[[redirects]]
-  from = "/api/*"
-  to = "https://api.ppanel.dev/:splat"
-  status = 200
-  force = false
+# No default /api proxy is configured. API-prefixed release artifacts require
+# an operator-owned redirect or function with an explicit backend target.
 
 # SPA 路由支持
 [[redirects]]

@@ -1,16 +1,22 @@
 export interface Env {
-  API_BASE_URL: string;
+  API_BASE_URL?: string;
 }
 
-const UNTRUSTED_IP_HEADERS = [
+const UNTRUSTED_FORWARDING_HEADERS = new Set([
   "cf-connecting-ip",
   "cf-connecting-ipv6",
   "forwarded",
   "true-client-ip",
+  "via",
   "x-client-ip",
-  "x-forwarded-for",
+  "x-cluster-client-ip",
+  "x-envoy-external-address",
+  "x-original-forwarded-for",
+  "x-original-url",
+  "x-proxyuser-ip",
   "x-real-ip",
-];
+  "x-rewrite-url",
+]);
 
 function isIPv4(value: string) {
   const parts = value.split(".");
@@ -49,13 +55,19 @@ function getCloudflareClientIp(headers: Headers) {
 
 export function buildUpstreamHeaders(
   requestHeaders: Headers,
-  upstreamHost: string
+  upstreamHost: string,
+  clientUrl: URL
 ) {
   const clientIp = getCloudflareClientIp(requestHeaders);
   const headers = new Headers(requestHeaders);
 
-  for (const header of UNTRUSTED_IP_HEADERS) {
-    headers.delete(header);
+  for (const header of [...headers.keys()]) {
+    if (
+      header.startsWith("x-forwarded-") ||
+      UNTRUSTED_FORWARDING_HEADERS.has(header)
+    ) {
+      headers.delete(header);
+    }
   }
 
   if (clientIp) {
@@ -66,6 +78,12 @@ export function buildUpstreamHeaders(
   }
 
   headers.set("Host", upstreamHost);
+  headers.set("x-forwarded-host", clientUrl.host);
+  headers.set(
+    "x-forwarded-port",
+    clientUrl.port || (clientUrl.protocol === "https:" ? "443" : "80")
+  );
+  headers.set("x-forwarded-proto", clientUrl.protocol.replace(/:$/, ""));
   headers.delete("cf-ipcountry");
   headers.delete("cf-ray");
   headers.delete("cf-visitor");
@@ -73,20 +91,80 @@ export function buildUpstreamHeaders(
   return headers;
 }
 
+function configurationError(message: string) {
+  return new Response(message, {
+    status: 503,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "text/plain; charset=utf-8",
+    },
+  });
+}
+
+function withCorsHeaders(headers: Headers, origin: string) {
+  const corsHeaders = new Headers(headers);
+  corsHeaders.set("Access-Control-Allow-Origin", origin);
+  corsHeaders.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+  );
+  corsHeaders.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  return corsHeaders;
+}
+
 export async function proxyRequest(
   request: Request,
   env: Env,
   upstreamFetch: typeof fetch = fetch
 ) {
-  const apiBase = (env.API_BASE_URL || "https://api.ppanel.dev").replace(
-    /\/$/,
-    ""
-  );
+  const configuredApiBase = env.API_BASE_URL?.trim();
+  if (!configuredApiBase) {
+    return configurationError(
+      "API proxy is not configured: API_BASE_URL is required."
+    );
+  }
+
+  let apiBaseUrl: URL;
+  try {
+    apiBaseUrl = new URL(configuredApiBase);
+  } catch {
+    return configurationError(
+      "API proxy is misconfigured: API_BASE_URL must be a valid HTTP(S) URL."
+    );
+  }
+
+  if (apiBaseUrl.protocol !== "http:" && apiBaseUrl.protocol !== "https:") {
+    return configurationError(
+      "API proxy is misconfigured: API_BASE_URL must use HTTP(S)."
+    );
+  }
+
+  if (
+    apiBaseUrl.username ||
+    apiBaseUrl.password ||
+    apiBaseUrl.pathname !== "/" ||
+    configuredApiBase.includes("?") ||
+    configuredApiBase.includes("#")
+  ) {
+    return configurationError(
+      "API proxy is misconfigured: API_BASE_URL must be an origin without credentials, path, query, or fragment."
+    );
+  }
 
   const url = new URL(request.url);
-  const targetUrl = `${apiBase}${url.pathname}${url.search}`;
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: withCorsHeaders(new Headers(), url.origin),
+    });
+  }
 
-  const headers = buildUpstreamHeaders(request.headers, new URL(apiBase).host);
+  const targetUrl = `${apiBaseUrl.origin}${url.pathname}${url.search}`;
+
+  const headers = buildUpstreamHeaders(request.headers, apiBaseUrl.host, url);
 
   const init: RequestInit = {
     method: request.method,
@@ -109,27 +187,11 @@ export async function proxyRequest(
 
   const responseHeaders = new Headers(response.headers);
   responseHeaders.delete("set-cookie");
-  responseHeaders.set("Access-Control-Allow-Origin", url.origin);
-  responseHeaders.set(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-  );
-  responseHeaders.set(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
-
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: responseHeaders,
-    });
-  }
 
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
-    headers: responseHeaders,
+    headers: withCorsHeaders(responseHeaders, url.origin),
   });
 }
 

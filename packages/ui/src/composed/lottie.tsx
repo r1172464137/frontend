@@ -1,58 +1,122 @@
 "use client";
 
-import type {
-  DotLottie,
-  DotLottieReactProps,
-} from "@lottiefiles/dotlottie-react";
-import type { ComponentProps } from "react";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import type { AnimationItem, LottiePlayer } from "lottie-web";
+import type { HTMLAttributes } from "react";
+import { useEffect, useRef, useState } from "react";
 
-// dotlottie-react ships a ~550KB inlined WASM player; load it on demand so
-// decorative animations never block first paint.
-const LazyDotLottie = lazy(() =>
-  import("@lottiefiles/dotlottie-react").then((m) => ({
-    default: m.DotLottieReact,
-  }))
-);
-
-export function DotLottieReact(props: ComponentProps<typeof LazyDotLottie>) {
-  return (
-    <Suspense fallback={null}>
-      <LazyDotLottie {...props} />
-    </Suspense>
-  );
+export interface LocalLottieProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
+  animationData?: Record<string, unknown>;
+  autoplay?: boolean;
+  loop?: boolean | number;
+  src?: string;
 }
 
-interface DeferredDotLottieProps
-  extends Omit<DotLottieReactProps, "className"> {
-  className?: string;
+export function isSameOriginLottieSource(source: string, pageUrl: string) {
+  try {
+    const sourceUrl = new URL(source, pageUrl);
+    return sourceUrl.origin === new URL(pageUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Renders Lottie JSON with the locally installed lottie-web package. This
+ * replaces DotLottie's WASM runtime, whose packaged default includes public
+ * CDN fallbacks.
+ */
+export function DotLottieReact({
+  animationData,
+  autoplay = false,
+  className,
+  loop = false,
+  src,
+  ...props
+}: LocalLottieProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const animationRef = useRef<AnimationItem | null>(null);
+  const autoplayRef = useRef(autoplay);
+
+  useEffect(() => {
+    autoplayRef.current = autoplay;
+    if (autoplay) {
+      animationRef.current?.play();
+    } else {
+      animationRef.current?.pause();
+    }
+  }, [autoplay]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!(container && (animationData || src))) {
+      return;
+    }
+    if (src && !isSameOriginLottieSource(src, window.location.href)) {
+      return;
+    }
+
+    let active = true;
+    let animation: AnimationItem | null = null;
+
+    import("lottie-web").then((module) => {
+      if (!active) {
+        return;
+      }
+
+      // lottie-web is CommonJS with default-export typings; Vite normalizes
+      // the runtime module to this default player object.
+      const lottie = module.default as unknown as LottiePlayer;
+      const source = animationData
+        ? { animationData }
+        : { path: src as string };
+      const loadedAnimation = lottie.loadAnimation({
+        ...source,
+        autoplay: false,
+        container,
+        loop,
+        renderer: "svg",
+        rendererSettings: {
+          preserveAspectRatio: "xMidYMid meet",
+        },
+      });
+      animation = loadedAnimation;
+      animationRef.current = loadedAnimation;
+      if (autoplayRef.current) {
+        loadedAnimation.play();
+      }
+    });
+
+    return () => {
+      active = false;
+      animation?.destroy();
+      if (animationRef.current === animation) {
+        animationRef.current = null;
+      }
+    };
+  }, [animationData, loop, src]);
+
+  return <div {...props} className={className} ref={containerRef} />;
+}
+
+interface DeferredLottieProps extends LocalLottieProps {
   rootMargin?: string;
   threshold?: number;
 }
 
 /**
  * Defers decorative animations until they are close to the viewport, pauses
- * them while off-screen, and avoids loading them for reduced-motion users.
- * The className is applied to the stable container so it also works as the
- * placeholder before the player is downloaded.
+ * them while off-screen, and avoids loading the renderer for reduced-motion
+ * users. The className is applied to the stable placeholder container.
  */
 export function DeferredDotLottie({
   autoplay,
   className,
-  dotLottieRefCallback,
   rootMargin = "0px",
   threshold = 0.25,
   ...props
-}: DeferredDotLottieProps) {
+}: DeferredLottieProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<DotLottie | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
@@ -100,35 +164,15 @@ export function DeferredDotLottie({
     return () => observer.disconnect();
   }, [rootMargin, threshold]);
 
-  useEffect(() => {
-    if (!(autoplay && isVisible) || prefersReducedMotion) {
-      playerRef.current?.pause();
-      return;
-    }
-
-    playerRef.current?.play();
-  }, [autoplay, isVisible, prefersReducedMotion]);
-
-  const setPlayerRef = useCallback(
-    (player: DotLottie | null) => {
-      playerRef.current = player;
-      dotLottieRefCallback?.(player);
-    },
-    [dotLottieRefCallback]
-  );
-
   return (
     <div className={className} ref={containerRef}>
-      <Suspense fallback={null}>
-        {shouldRender && !prefersReducedMotion ? (
-          <LazyDotLottie
-            {...props}
-            autoplay={Boolean(autoplay && isVisible)}
-            className="size-full"
-            dotLottieRefCallback={setPlayerRef}
-          />
-        ) : null}
-      </Suspense>
+      {shouldRender && !prefersReducedMotion ? (
+        <DotLottieReact
+          {...props}
+          autoplay={Boolean(autoplay && isVisible)}
+          className="size-full"
+        />
+      ) : null}
     </div>
   );
 }

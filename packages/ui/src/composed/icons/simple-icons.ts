@@ -1,4 +1,4 @@
-import type { IconifyIcon } from "@iconify/react";
+import type { IconifyIcon } from "@iconify/react/offline";
 import Harmonyos from "@iconify-icons/simple-icons/harmonyos";
 import Ios from "@iconify-icons/simple-icons/ios";
 

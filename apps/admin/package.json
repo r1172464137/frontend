@@ -17,7 +17,6 @@
     "@faker-js/faker": "^10.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@lottiefiles/dotlottie-react": "^0.17.7",
     "@noble/curves": "^2.0.1",
     "@noble/post-quantum": "^0.6.1",
     "@stripe/react-stripe-js": "^5.4.0",

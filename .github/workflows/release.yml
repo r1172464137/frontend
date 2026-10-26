@@ -48,12 +48,14 @@ jobs:
       - name: Install locked dependencies without interactive prepare
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Test admin, user, and release contract
+      - name: Test applications, shared UI, API proxies, and release contracts
         run: |
           set -euo pipefail
+          (cd packages/ui && NODE_ENV=test bun run test)
           (cd apps/admin && NODE_ENV=test bun run test)
           (cd apps/user && NODE_ENV=test bun run test)
-          node --test scripts/release-workflow.test.mjs
+          NODE_ENV=test bun test tests/functions/pages-proxy.test.ts tests/functions/api-dev-proxy.test.ts
+          node --test scripts/release-workflow.test.mjs scripts/release-dist-privacy.test.mjs
 
       - name: Validate the release version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -107,6 +109,6 @@ jobs:
             | --- | --- |
             | `ppanel-admin-web.tar.gz` / `.zip` | Same-origin `/v1/` and `/v2/` |
             | `ppanel-user-web.tar.gz` / `.zip` | Same-origin `/v1/` and `/v2/` |
-            | `*-with-api.tar.gz` | Same-origin `/api/v1/` and `/api/v2/`; strip `/api` at the reverse proxy |
+            | `*-with-api.tar.gz` | Same-origin `/api/v1/` and `/api/v2/`; requires an operator-owned target that strips `/api` |
 
-            All archives contain `index.html` at their root. `SHA256SUMS` covers every archive. Keep admin and user in separate static directories; the admin bundle may be served under a subdirectory such as `/admin/`.
+            No archive embeds an API host or supplier fallback. All archives contain `index.html` at their root. `SHA256SUMS` covers every archive. Keep admin and user in separate static directories; the admin bundle may be served under a subdirectory such as `/admin/`.

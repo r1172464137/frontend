@@ -1,4 +1,4 @@
-import type { IconifyIcon } from "@iconify/react";
+import type { IconifyIcon } from "@iconify/react/offline";
 import Advertising from "@iconify-icons/flat-color-icons/advertising";
 import Bookmark from "@iconify-icons/flat-color-icons/bookmark";
 import Bullish from "@iconify-icons/flat-color-icons/bullish";

@@ -4,11 +4,10 @@ Dashboard is the homepage of the admin panel, displaying real-time system core d
 
 ## Page Overview
 
-Dashboard consists of three main areas:
+Dashboard consists of two main areas:
 
 1. **Key Metrics Cards** - 6 core business indicators
 2. **Statistics Charts** - Revenue, user, and traffic statistics
-3. **Sponsor Display** - Shows PPanel sponsors
 
 ## Key Metrics Cards
 
@@ -159,28 +158,6 @@ Displays node or user traffic usage ranking:
 Traffic = Upload traffic + Download traffic, automatically converted to KB/MB/GB/TB units.
 :::
 
-## Sponsor Display
-
-Bottom of page shows sponsors supporting the PPanel project:
-
-**Display Content**:
-- Sponsor logo
-- Sponsor name
-- Brief description
-
-**Data Source**:
-- Fetches latest sponsor list from GitHub repository
-- CDN accelerated access
-- Auto-filters expired sponsors
-
-**Interaction**:
-- Click card to visit sponsor website
-- Opens in new window
-
-::: tip Support PPanel
-Sponsoring helps PPanel continue releasing updates! Click sponsor cards to visit their services.
-:::
-
 ## Data Refresh
 
 - **Auto Refresh**: Page data updates automatically based on query configuration
@@ -209,13 +186,6 @@ Possible causes:
 - No data in the time period
 - Data statistics service issue
 - Try refreshing the page
-
-### Sponsors Not Showing?
-
-Possible causes:
-- Network connection issue, cannot access CDN
-- No valid sponsors in current period
-- Browser blocking external resources
 
 ## Next Steps
 

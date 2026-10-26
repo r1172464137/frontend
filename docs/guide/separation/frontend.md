@@ -17,6 +17,8 @@ Route `/v1/` and `/v2/` to the backend in your production reverse proxy. For sep
 
 `VITE_API_PREFIX` remains optional for custom reverse proxies. If it is `/api`, the proxy must forward `/api/v1/...` as `/v1/...` and `/api/v2/...` as `/v2/...`. This prefix does not require the retired gateway service. Vite development proxies perform this rewrite and default to `http://127.0.0.1:8080` when no API base URL is configured.
 
+The normal release archives keep `VITE_API_BASE_URL=` and `VITE_API_PREFIX=`. The established `*-with-api.tar.gz` archives are still provided with `VITE_API_BASE_URL=` and `VITE_API_PREFIX=/api`, but they do not embed a backend destination. Their operator must explicitly configure an owned reverse proxy that strips `/api`; they intentionally have no supplier fallback.
+
 These values are applied at build time. Rebuild and redeploy both frontends after changing them. Existing gateway installations must also configure the backend's `Host` and `Port` and update upstream routing; the backend no longer registers its address with the gateway or reads `PPANEL_PORT`.
 
 ## Overview
@@ -110,12 +112,6 @@ Create environment configuration files in application directories.
 # Backend API address (required)
 VITE_API_BASE_URL=https://api.your-domain.com
 
-# CDN address (optional, for accelerating static resources)
-VITE_CDN_URL=https://cdn.jsdmirror.com
-
-# Enable tutorial documentation (optional)
-VITE_TUTORIAL_DOCUMENT=true
-
 # Show landing page (optional, set to false to redirect to login directly)
 VITE_SHOW_LANDING_PAGE=true
 
@@ -130,15 +126,30 @@ VITE_USER_PASSWORD=
 # Backend API address (required)
 VITE_API_BASE_URL=https://api.your-domain.com
 
-# CDN address (optional)
-VITE_CDN_URL=https://cdn.jsdmirror.com
-
-# Enable tutorial documentation (optional)
-VITE_TUTORIAL_DOCUMENT=true
+# User tutorial: disabled by default; true uses ./assets/tutorial
+VITE_TUTORIAL_DOCUMENT=false
 
 # Development default credentials (leave empty in production)
 VITE_USER_EMAIL=
 VITE_USER_PASSWORD=
+```
+
+Tutorials are a user-web feature only. This repository does not bundle a
+tutorial snapshot, so the feature is disabled by default. Before setting
+`VITE_TUTORIAL_DOCUMENT=true`, place a reviewed `SUMMARY.md`, its Markdown
+files, and any referenced assets in `apps/user/public/assets/tutorial`. The
+variable may instead contain a same-origin root such as `/assets/tutorial`;
+absolute URLs and traversal paths are rejected. The backend `show_tutorial`
+setting must also be enabled. When it is false, the user web does not load the
+tutorial index or tutorial UI code. The required `SUMMARY.md` can use this
+minimal locale navigation format (all linked paths must remain relative):
+
+```markdown
+## en-US
+* [Getting started](en-US/getting-started.md)
+
+## zh-CN
+* [快速开始](zh-CN/getting-started.md)
 ```
 
 #### 5. Build Applications
@@ -190,9 +201,8 @@ Click the button below to deploy to Vercel with one click:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?demo-description=PPanel%20is%20a%20pure%2C%20professional%2C%20and%20perfect%20open-source%20proxy%20panel%20tool&demo-image=https%3A%2F%2Furlscan.io%2Fliveshot%2F%3Fwidth%3D1920%26height%3D1080%26url%3Dhttps%3A%2F%2Fuser.ppanel.dev&demo-title=PPanel%20User%20Web&repository-url=https%3A%2F%2Fgithub.com%2Fperfect-panel%2Ffrontend&root-directory=apps%2Fuser)
 
-After deployment, configure environment variables in Vercel console:
-- `VITE_API_BASE_URL`: Your backend API address
-- `VITE_CDN_URL`: CDN address (optional)
+After deployment, configure `VITE_API_BASE_URL` with your backend API address
+in the Vercel console.
 
 ### Method 3: Deploy with Netlify
 
@@ -224,9 +234,10 @@ netlify deploy --prod --dir=dist
 
 #### 4. Configure Environment Variables
 
-Add in Netlify console under Site settings → Build & deploy → Environment:
-- `VITE_API_BASE_URL`
-- `VITE_CDN_URL`
+Add `VITE_API_BASE_URL` in the Netlify console under Site settings → Build &
+deploy → Environment.
+
+The checked-in `netlify.toml` intentionally does not define an `/api` proxy. When deploying a prebuilt `*-with-api.tar.gz` archive, add an operator-owned Netlify Function or redirect with an explicit backend target and strip the `/api` prefix. Without that site-specific configuration, `/api` is not forwarded to any default backend. (`VITE_API_BASE_URL` is a build-time setting and cannot change an already-built archive.)
 
 ### Method 4: Deploy with Cloudflare Pages
 
@@ -256,7 +267,8 @@ the shared `/functions` directory used to proxy `/v1/*` requests.
 Add in Settings → Environment variables:
 - `API_BASE_URL`: Backend API origin used by the Pages Function, for example
   `https://api.your-domain.com`
-- `VITE_CDN_URL`
+
+`API_BASE_URL` is required for the Pages API proxy. If it is missing or blank, the Function returns `503 Service Unavailable` and does not forward the request, body, or authorization headers.
 
 ## Self-Hosted Server Deployment
 
@@ -483,8 +495,7 @@ sudo systemctl enable caddy
 | Variable | Description | Required | Default | Example |
 |----------|-------------|----------|---------|---------|
 | `VITE_API_BASE_URL` | Backend API address | ✅ | - | `https://api.your-domain.com` |
-| `VITE_CDN_URL` | CDN address | ❌ | `https://cdn.jsdmirror.com` | `https://cdn.your-domain.com` |
-| `VITE_TUTORIAL_DOCUMENT` | Enable tutorial docs | ❌ | `true` | `true` / `false` |
+| `VITE_TUTORIAL_DOCUMENT` | User web only: enable a local tutorial or set its same-origin root | ❌ | `false` | `true` / `/assets/tutorial` |
 | `VITE_SHOW_LANDING_PAGE` | Show landing page | ❌ | `true` | `true` / `false` |
 | `VITE_USER_EMAIL` | Default login email (dev only) | ❌ | - | - |
 | `VITE_USER_PASSWORD` | Default login password (dev only) | ❌ | - | - |
@@ -553,10 +564,6 @@ Vite automatically handles this during build, adding `<link rel="modulepreload">
 ### 4. Enable Service Worker
 
 Frontend has built-in PWA support, Service Worker caching is automatically enabled after build.
-
-### 5. Use CDN Acceleration
-
-Configure `VITE_CDN_URL` environment variable to load static resources from CDN.
 
 ## Troubleshooting
 

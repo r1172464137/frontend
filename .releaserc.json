@@ -135,7 +135,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "bun run build && tar -czf admin.tar.gz -C apps/admin/dist . && tar -czf user.tar.gz -C apps/user/dist . && echo 'VITE_API_PREFIX=/api' > apps/admin/.env && echo 'VITE_API_PREFIX=/api' > apps/user/.env && bun run build && tar -czf admin-with-api.tar.gz -C apps/admin/dist . && tar -czf user-with-api.tar.gz -C apps/user/dist ."
+        "prepareCmd": "bash scripts/build-release.sh \"$PWD/release\""
       }
     ],
     [
@@ -143,24 +143,39 @@
       {
         "assets": [
           {
-            "path": "admin.tar.gz",
+            "path": "release/ppanel-admin-web.tar.gz",
             "name": "ppanel-admin-web.tar.gz",
             "label": "Admin Web (without API prefix)"
           },
           {
-            "path": "user.tar.gz",
+            "path": "release/ppanel-user-web.tar.gz",
             "name": "ppanel-user-web.tar.gz",
             "label": "User Web (without API prefix)"
           },
           {
-            "path": "admin-with-api.tar.gz",
+            "path": "release/ppanel-admin-web-with-api.tar.gz",
             "name": "ppanel-admin-web-with-api.tar.gz",
             "label": "Admin Web (with /api prefix)"
           },
           {
-            "path": "user-with-api.tar.gz",
+            "path": "release/ppanel-user-web-with-api.tar.gz",
             "name": "ppanel-user-web-with-api.tar.gz",
             "label": "User Web (with /api prefix)"
+          },
+          {
+            "path": "release/ppanel-admin-web.zip",
+            "name": "ppanel-admin-web.zip",
+            "label": "Admin Web ZIP (without API prefix)"
+          },
+          {
+            "path": "release/ppanel-user-web.zip",
+            "name": "ppanel-user-web.zip",
+            "label": "User Web ZIP (without API prefix)"
+          },
+          {
+            "path": "release/SHA256SUMS",
+            "name": "SHA256SUMS",
+            "label": "Release archive checksums"
           }
         ]
       }

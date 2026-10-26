@@ -14,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@workspace/ui/components/popover";
-import { Icon } from "@workspace/ui/composed/icon";
+import { CountryFlag } from "@workspace/ui/composed/country-flag";
 import { cn } from "@workspace/ui/lib/utils";
 import { countries, type ICountry } from "@workspace/ui/utils/countries";
 import { BoxIcon, Check, ChevronsUpDown } from "lucide-react";
@@ -77,9 +77,9 @@ export const AreaCodeSelect = ({
         >
           {selectedItem ? (
             <div className="flex items-center gap-2">
-              <Icon
-                className="!size-5"
-                icon={`flagpack:${selectedItem.alpha2.toLowerCase()}`}
+              <CountryFlag
+                className="size-5"
+                countryCode={selectedItem.alpha2}
               />
               +{selectedItem.phone}
               {!simple && `(${selectedItem.name})`}
@@ -109,10 +109,7 @@ export const AreaCodeSelect = ({
                   value={`${item.phone}-${item.name}`}
                 >
                   <div className="flex items-center gap-2">
-                    <Icon
-                      className="!size-5"
-                      icon={`flagpack:${item.alpha2.toLowerCase()}`}
-                    />
+                    <CountryFlag className="size-5" countryCode={item.alpha2} />
                     +{item.phone} ({item.name})
                   </div>
                   <Check

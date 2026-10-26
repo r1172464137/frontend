@@ -34,12 +34,6 @@ export default defineConfig({
           { text: "Guide", link: "/guide/intro" },
           { text: "Features", link: "/admin/dashboard" },
           { text: "API", link: "/api/reference" },
-          { text: "Sponsors", link: "/sponsors" },
-          {
-            text: "Stats",
-            link: "https://stats.ppanel.dev",
-            target: "_blank",
-          },
           { text: "Buy Theme", link: "https://bygga.app", target: "_blank" },
         ],
         sidebar: {
@@ -220,12 +214,6 @@ export default defineConfig({
           { text: "指南", link: "/zh/guide/intro" },
           { text: "功能文档", link: "/zh/admin/dashboard" },
           { text: "API 文档", link: "/zh/api/reference" },
-          { text: "赞助商", link: "/zh/sponsors" },
-          {
-            text: "统计",
-            link: "https://stats.ppanel.dev",
-            target: "_blank",
-          },
           { text: "主题购买", link: "https://bygga.app", target: "_blank" },
         ],
         sidebar: {

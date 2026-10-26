@@ -1,7 +1,7 @@
 "use client";
 
-import type { Monaco } from "@monaco-editor/react";
 import {
+  type Monaco,
   MonacoEditor,
   type MonacoEditorProps,
 } from "@workspace/ui/composed/editor/monaco-editor";

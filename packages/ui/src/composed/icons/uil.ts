@@ -1,4 +1,4 @@
-import type { IconifyIcon } from "@iconify/react";
+import type { IconifyIcon } from "@iconify/react/offline";
 import Android from "@iconify-icons/uil/android";
 import Apple from "@iconify-icons/uil/apple";
 import Bell from "@iconify-icons/uil/bell";
