@@ -15,11 +15,11 @@ test("openapi adaptation workflow triggers only for main pushes that touch swagg
   assert.doesNotMatch(workflow, /^\s+pull_request(?:_target)?:/m);
 });
 
-test("openapi adaptation workflow checks out trusted develop code with read-only permissions", () => {
+test("openapi adaptation workflow checks out trusted fork main with read-only permissions", () => {
   assert.match(workflow, /permissions:\n\s+contents: read/);
   assert.match(
     workflow,
-    /uses: actions\/checkout@v4\n\s+with:\n\s+ref: develop/
+    /uses: actions\/checkout@v4\n\s+with:\n\s+ref: main/
   );
   assert.doesNotMatch(
     workflow,
@@ -45,6 +45,9 @@ test("openapi adaptation workflow sends only automation webhook context and meta
   assert.match(workflow, /GITHUB_SHA: \$\{\{ github\.sha \}\}/);
   assert.match(workflow, /GITHUB_REF: \$\{\{ github\.ref \}\}/);
   assert.match(workflow, /GITHUB_EVENT_PATH: \$\{\{ github\.event_path \}\}/);
+  assert.match(workflow, /Automation webhook is not configured/);
+  assert.match(workflow, /-z \"\$AUTOMATION_WEBHOOK_URL\"/);
+  assert.match(workflow, /-z \"\$AUTOMATION_WEBHOOK_SECRET\"/);
   assert.doesNotMatch(workflow, /BRIDGE_/);
 });
 
