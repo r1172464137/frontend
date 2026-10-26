@@ -66,12 +66,21 @@ describe("restricted tutorial Markdown", () => {
       <TutorialMarkdown>{HOSTILE_MARKDOWN + suffix}</TutorialMarkdown>
     );
 
-    await waitFor(() => {
-      expect(container.querySelector("h1")?.textContent).toBe("Safe tutorial");
-      expect(
-        container.querySelector('img[src="/assets/tutorial/images/local.png"]')
-      ).not.toBeNull();
-    });
+    await waitFor(
+      () => {
+        expect(container.querySelector("h1")?.textContent).toBe(
+          "Safe tutorial"
+        );
+        expect(
+          container.querySelector(
+            'img[src="/assets/tutorial/images/local.png"]'
+          )
+        ).not.toBeNull();
+      },
+      // The rich path cold-loads syntax highlighting and KaTeX chunks on CI.
+      // Keep a bounded allowance without sleeping or weakening assertions.
+      { timeout: 10_000 }
+    );
 
     expect(container.querySelectorAll("img")).toHaveLength(1);
     expect(document.querySelectorAll(RESOURCE_BEARING_SELECTOR)).toHaveLength(
