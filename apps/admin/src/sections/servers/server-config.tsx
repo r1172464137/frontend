@@ -35,7 +35,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
-import { Textarea } from "@workspace/ui/components/textarea";
 import { ArrayInput } from "@workspace/ui/composed/dynamic-Inputs";
 import { EnhancedInput } from "@workspace/ui/composed/enhanced-input";
 import { Icon } from "@workspace/ui/composed/icon";
@@ -53,9 +52,18 @@ import { toast } from "sonner";
 import { z } from "zod";
 import {
   normalizeOutboundConfig,
-  outboundConfigSchema,
+  outboundConfigForPayload,
+  outboundConfigListSchema,
 } from "./outbound-config";
 import { OutboundConfigInput } from "./outbound-config-input";
+import { RouteMatchGroupsEditor } from "./route-rule-editor";
+import {
+  domainRuleListSchema,
+  ipRuleListSchema,
+  normalizeRuleLines,
+  protocolRuleListSchema,
+  supportsStructuredRouteRules,
+} from "./route-rules";
 
 const dnsConfigSchema = z.object({
   proto: z.string(), // z.enum(['tcp', 'udp', 'tls', 'https', 'quic']),
@@ -71,8 +79,10 @@ const nodeConfigSchema = z.object({
   traffic_report_threshold: z.number().optional(),
   ip_strategy: z.enum(["prefer_ipv4", "prefer_ipv6"]).optional(),
   dns: z.array(dnsConfigSchema).optional(),
-  block: z.array(z.string()).optional(),
-  outbound: z.array(outboundConfigSchema).optional(),
+  block: domainRuleListSchema.optional(),
+  block_ips: ipRuleListSchema.optional(),
+  block_protocols: protocolRuleListSchema.optional(),
+  outbound: outboundConfigListSchema.optional(),
 });
 type NodeConfigFormData = z.infer<typeof nodeConfigSchema>;
 
@@ -100,6 +110,8 @@ export default function ServerConfig() {
       ip_strategy: "prefer_ipv4",
       dns: [],
       block: [],
+      block_ips: [],
+      block_protocols: [],
       outbound: [],
     },
   });
@@ -117,21 +129,38 @@ export default function ServerConfig() {
           (cfgResp.ip_strategy as "prefer_ipv4" | "prefer_ipv6" | undefined) ||
           "prefer_ipv4",
         dns: cfgResp.dns || [],
-        block: cfgResp.block || [],
-        outbound: cfgResp.outbound || [],
+        block: normalizeRuleLines(cfgResp.block),
+        block_ips: normalizeRuleLines(cfgResp.block_ips),
+        block_protocols: normalizeRuleLines(cfgResp.block_protocols),
+        outbound: (cfgResp.outbound || []).map((item) =>
+          normalizeOutboundConfig(item)
+        ),
       });
     }
   }, [cfgResp, form]);
 
+  const structuredRulesSupported = supportsStructuredRouteRules(
+    cfgResp as unknown as Record<string, unknown> | undefined
+  );
+
   async function onSubmit(values: NodeConfigFormData) {
     setSaving(true);
     try {
-      await updateNodeConfig({
+      const payload: Record<string, unknown> = {
         ...values,
+        block: normalizeRuleLines(values.block),
         outbound: (values.outbound || []).map((item) =>
-          normalizeOutboundConfig(item)
+          outboundConfigForPayload(item, structuredRulesSupported)
         ),
-      } as API.NodeConfig);
+      };
+      if (structuredRulesSupported) {
+        payload.block_ips = normalizeRuleLines(values.block_ips);
+        payload.block_protocols = normalizeRuleLines(values.block_protocols);
+      } else {
+        Reflect.deleteProperty(payload, "block_ips");
+        Reflect.deleteProperty(payload, "block_protocols");
+      }
+      await updateNodeConfig(payload as API.NodeConfig);
       toast.success(t("server_config.saveSuccess", "Saved successfully"));
       await refetchCfg();
       setOpen(false);
@@ -500,6 +529,7 @@ export default function ServerConfig() {
                                 )
                               );
                             }}
+                            structuredRulesSupported={structuredRulesSupported}
                             value={field.value || []}
                           />
                         </FormControl>
@@ -510,30 +540,30 @@ export default function ServerConfig() {
                 </TabsContent>
 
                 <TabsContent className="space-y-4" value="block">
-                  <FormField
-                    control={form.control}
-                    name="block"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Textarea
-                            onChange={(e) => {
-                              const lines = e.target.value
-                                .split("\n")
-                                .map((line) => line.trim());
-                              field.onChange(lines);
-                            }}
-                            placeholder={t(
-                              "server_config.fields.block_rules_placeholder",
-                              "One domain rule per line"
-                            )}
-                            rows={10}
-                            value={(field.value || []).join("\n")}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  <RouteMatchGroupsEditor
+                    domains={form.watch("block") || []}
+                    ips={form.watch("block_ips") || []}
+                    onDomainsChange={(value) =>
+                      form.setValue("block", value, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    onIPsChange={(value) =>
+                      form.setValue("block_ips", value, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    onProtocolsChange={(value) =>
+                      form.setValue("block_protocols", value, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    protocols={form.watch("block_protocols") || []}
+                    showCapabilityNotice
+                    structuredRulesSupported={structuredRulesSupported}
                   />
                 </TabsContent>
               </form>

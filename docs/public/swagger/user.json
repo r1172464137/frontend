@@ -44,44 +44,6 @@
                 }
             }
         },
-        "/v1/app/ws/{userid}/{identifier}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Upgrades the connection to the signed-in user's device socket. The client sends \"ping\" (or \"heartbeat\") as its heartbeat and is answered \"ping\"; the server pushes JSON messages such as {\"method\":\"subscribe_update\"}, {\"method\":\"kicked_device\"} and {\"method\":\"kicked_admin\"}.",
-                "tags": [
-                    "user"
-                ],
-                "summary": "Device WebSocket",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID of the signed-in user",
-                        "name": "userid",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Device identifier",
-                        "name": "identifier",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "101": {
-                        "description": "Switching Protocols",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/public/announcement/list": {
             "get": {
                 "security": [
@@ -722,12 +684,6 @@
                         "name": "order_no",
                         "in": "query",
                         "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Guest checkout capability; preferred over the checkout_token query parameter",
-                        "name": "X-Checkout-Token",
-                        "in": "header"
                     }
                 ],
                 "responses": {
@@ -1352,7 +1308,6 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Binds the email address proven by the code sent to it. Replacing the one the account already has also requires the current password (password), or, for an account without a password, the security code sent to the current email address (current_code), and ends every session of the account.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1391,7 +1346,6 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Binds the phone number proven by the code sent to it. Replacing the one the account already has also requires the current password (password), or, for an account without a password, the security code sent to the current phone number (current_code), and ends every session of the account.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1777,30 +1731,6 @@
                 }
             }
         },
-        "/v1/public/user/logout": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user"
-                ],
-                "summary": "Logout",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/result.ResponseSuccessBean"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/public/user/notify": {
             "put": {
                 "security": [
@@ -1882,7 +1812,6 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Sets the account's password and ends every session of the account. Changing an existing password requires the current one (old_password); setting the first password of an account with a bound email or phone number requires the security code sent to it (current_code); an account with neither sets it with the session alone. The response lists the third-party sign-in methods (OAuth providers, Telegram) still bound to the account, which the change does not remove.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1908,19 +1837,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/result.ResponseSuccessBean"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.UpdateUserPasswordResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/result.ResponseSuccessBean"
                         }
                     }
                 }
@@ -2863,8 +2780,7 @@
                         "google",
                         "apple",
                         "telegram",
-                        "github",
-                        "facebook"
+                        "github"
                     ]
                 }
             }
@@ -2882,8 +2798,7 @@
                         "google",
                         "apple",
                         "telegram",
-                        "github",
-                        "facebook"
+                        "github"
                     ]
                 },
                 "redirect": {
@@ -3023,46 +2938,29 @@
         },
         "dto.CreateUserTicketFollowRequest": {
             "type": "object",
-            "required": [
-                "content",
-                "ticket_id"
-            ],
             "properties": {
                 "content": {
-                    "type": "string",
-                    "maxLength": 65535
+                    "type": "string"
                 },
                 "from": {
-                    "description": "From is ignored: the author is always the ticket owner.",
-                    "type": "string",
-                    "maxLength": 255
+                    "type": "string"
                 },
                 "ticket_id": {
                     "type": "integer"
                 },
                 "type": {
-                    "type": "integer",
-                    "enum": [
-                        0,
-                        1,
-                        2
-                    ]
+                    "type": "integer"
                 }
             }
         },
         "dto.CreateUserTicketRequest": {
             "type": "object",
-            "required": [
-                "title"
-            ],
             "properties": {
                 "description": {
-                    "type": "string",
-                    "maxLength": 10000
+                    "type": "string"
                 },
                 "title": {
-                    "type": "string",
-                    "maxLength": 255
+                    "type": "string"
                 }
             }
         },
@@ -3272,10 +3170,6 @@
                 },
                 "user_id": {
                     "type": "integer"
-                },
-                "user_subscribe_id": {
-                    "description": "UserSubscribeId is the user subscription a renewal or traffic reset\norder applies to; zero for other orders and for orders created before\nit was recorded.",
-                    "type": "integer"
                 }
             }
         },
@@ -3323,11 +3217,7 @@
             ],
             "properties": {
                 "auth_type": {
-                    "type": "string",
-                    "enum": [
-                        "email",
-                        "mobile"
-                    ]
+                    "type": "string"
                 },
                 "coupon": {
                     "type": "string"
@@ -3932,25 +3822,11 @@
         "dto.UpdateBindEmailRequest": {
             "type": "object",
             "required": [
-                "code",
                 "email"
             ],
             "properties": {
-                "code": {
-                    "description": "Code is the register-type verification code sent to Email.",
-                    "type": "string"
-                },
-                "current_code": {
-                    "description": "CurrentCode is the security-type verification code sent to the email\nthe account already has. Replacing it requires the code when the\naccount has no password.",
-                    "type": "string"
-                },
                 "email": {
                     "type": "string"
-                },
-                "password": {
-                    "description": "Password is the account's current password. Replacing an email the\naccount already has requires it when the account has a password; a\nfirst binding does not.",
-                    "type": "string",
-                    "maxLength": 128
                 }
             }
         },
@@ -3966,20 +3842,10 @@
                     "type": "string"
                 },
                 "code": {
-                    "description": "Code is the register-type verification code sent to Mobile.",
-                    "type": "string"
-                },
-                "current_code": {
-                    "description": "CurrentCode is the security-type verification code sent to the number\nthe account already has. Replacing it requires the code when the\naccount has no password.",
                     "type": "string"
                 },
                 "mobile": {
                     "type": "string"
-                },
-                "password": {
-                    "description": "Password is the account's current password. Replacing a number the\naccount already has requires it when the account has a password; a\nfirst binding does not.",
-                    "type": "string",
-                    "maxLength": 128
                 }
             }
         },
@@ -4006,31 +3872,10 @@
                 "password"
             ],
             "properties": {
-                "current_code": {
-                    "description": "CurrentCode is the security-type verification code sent to the email\nor phone number the account has bound. Setting the first password of\nan account that has one bound requires it; an account with neither a\npassword nor a bound email or phone number (OAuth or device sign-in\nonly) sets its first password without it.",
-                    "type": "string"
-                },
-                "old_password": {
-                    "description": "OldPassword is required once the account has a password.",
-                    "type": "string",
-                    "maxLength": 128
-                },
                 "password": {
                     "type": "string",
                     "maxLength": 128,
                     "minLength": 8
-                }
-            }
-        },
-        "dto.UpdateUserPasswordResponse": {
-            "type": "object",
-            "properties": {
-                "third_party_bindings": {
-                    "description": "ThirdPartyBindings lists the types of the third-party sign-in methods\n(OAuth providers, Telegram) still bound to the account, so the client\ncan show them: a binding made during a compromise keeps signing in\nuntil its owner removes it.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 }
             }
         },
@@ -4136,8 +3981,7 @@
                     "type": "integer"
                 },
                 "referral_percentage": {
-                    "type": "integer",
-                    "maximum": 100
+                    "type": "integer"
                 },
                 "rules": {
                     "type": "array",
@@ -4272,9 +4116,6 @@
                 "download": {
                     "type": "integer"
                 },
-                "entitlement_source": {
-                    "type": "string"
-                },
                 "expire_time": {
                     "type": "integer"
                 },
@@ -4330,9 +4171,6 @@
                 },
                 "download": {
                     "type": "integer"
-                },
-                "entitlement_source": {
-                    "type": "string"
                 },
                 "expire_time": {
                     "type": "integer"
@@ -4535,11 +4373,7 @@
             "type": "object",
             "properties": {
                 "auth_type": {
-                    "type": "string",
-                    "enum": [
-                        "email",
-                        "mobile"
-                    ]
+                    "type": "string"
                 },
                 "identifier": {
                     "type": "string"
@@ -4548,9 +4382,6 @@
                     "type": "string"
                 },
                 "password": {
-                    "type": "string"
-                },
-                "turnstile_token": {
                     "type": "string"
                 }
             }

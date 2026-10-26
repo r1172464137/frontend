@@ -1,12 +1,36 @@
 import type { OpenAPIObject, SchemaObject } from "openapi3-ts";
 
-const responseRequiredOverrides: Record<string, string[]> = {
+// Mixed-version panels must be able to observe that additive route fields are
+// absent. Keep those response properties optional in generated clients; all
+// legacy properties retain their established requiredness.
+export const responseRequiredOverrides: Record<string, string[]> = {
   DownloadLink: [],
+  NodeConfig: [
+    "block",
+    "dns",
+    "ip_strategy",
+    "node_pull_interval",
+    "node_push_interval",
+    "node_secret",
+    "outbound",
+    "traffic_report_threshold",
+  ],
   NodeDNS: ["proto", "address", "domains"],
   NodeOutbound: ["name", "protocol", "address", "port", "password", "rules"],
+  ServerNodeConfigOverride: [
+    "block",
+    "dns",
+    "inherit_block",
+    "inherit_dns",
+    "inherit_ip_strategy",
+    "inherit_outbound",
+    "ip_strategy",
+    "outbound",
+  ],
+  ServerNodeConfigValues: ["block", "dns", "ip_strategy", "outbound"],
 };
 
-function requireResponseProperties(openAPIData: OpenAPIObject) {
+export function requireResponseProperties(openAPIData: OpenAPIObject) {
   const schemas = openAPIData.components?.schemas ?? {};
 
   for (const [name, schema] of Object.entries(schemas)) {

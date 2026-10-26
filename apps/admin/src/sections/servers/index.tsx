@@ -221,7 +221,8 @@ export default function Servers() {
         data?: { id?: number };
       };
       const newServerId = createData.data?.id;
-      const override = configResp.data?.data?.override;
+      const config = configResp.data?.data;
+      const override = config?.override;
 
       if (newServerId && override) {
         await updateServerNodeConfig({
@@ -232,6 +233,14 @@ export default function Servers() {
           dns: override.dns || [],
           inherit_block: override.inherit_block,
           block: override.block || [],
+          ...(config?.global &&
+          Object.hasOwn(config.global, "block_ips") &&
+          Object.hasOwn(config.global, "block_protocols")
+            ? {
+                block_ips: override.block_ips || [],
+                block_protocols: override.block_protocols || [],
+              }
+            : {}),
           inherit_outbound: override.inherit_outbound,
           outbound: override.outbound || [],
         });

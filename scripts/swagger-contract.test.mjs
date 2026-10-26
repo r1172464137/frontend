@@ -61,3 +61,27 @@ test("Swagger assets satisfy the frontend documentation contract", async () => {
     `Validated ${jsonFiles.length} Swagger JSON file(s): ${jsonFiles.join(", ")}`
   );
 });
+
+test("admin Swagger exposes the structured route-rule contract", async () => {
+  const spec = JSON.parse(
+    await readFile(path.join(swaggerDir, "admin.json"), "utf8")
+  );
+  const expected = {
+    "dto.NodeConfig": ["block_ips", "block_protocols"],
+    "dto.NodeOutbound": ["ip_rules", "protocol_rules"],
+    "dto.ServerNodeConfigOverride": ["block_ips", "block_protocols"],
+    "dto.ServerNodeConfigValues": ["block_ips", "block_protocols"],
+    "dto.UpdateServerNodeConfigRequest": ["block_ips", "block_protocols"],
+  };
+
+  for (const [definition, fields] of Object.entries(expected)) {
+    const properties = spec.definitions?.[definition]?.properties;
+    assert.ok(properties, `admin Swagger definition ${definition} must exist`);
+    for (const field of fields) {
+      assert.ok(
+        properties[field],
+        `admin Swagger definition ${definition} must expose ${field}`
+      );
+    }
+  }
+});

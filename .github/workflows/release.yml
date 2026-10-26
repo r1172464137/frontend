@@ -48,6 +48,9 @@ jobs:
       - name: Install locked dependencies without interactive prepare
         run: bun install --frozen-lockfile --ignore-scripts
 
+      - name: Run workspace Biome checks
+        run: bun run check
+
       - name: Test applications, shared UI, API proxies, and release contracts
         run: |
           set -euo pipefail
@@ -55,7 +58,7 @@ jobs:
           (cd apps/admin && NODE_ENV=test bun run test)
           (cd apps/user && NODE_ENV=test bun run test)
           NODE_ENV=test bun test tests/functions/pages-proxy.test.ts tests/functions/api-dev-proxy.test.ts
-          node --test scripts/release-workflow.test.mjs scripts/release-dist-privacy.test.mjs
+          node --test scripts/release-workflow.test.mjs scripts/release-dist-privacy.test.mjs scripts/swagger-contract.test.mjs scripts/openapi-source-contract.test.mjs scripts/openapi-generator-contract.test.mjs
 
       - name: Validate the release version
         if: startsWith(github.ref, 'refs/tags/v')

@@ -1121,6 +1121,8 @@ subscription URL does not carry them, in query-string form such as
 
   type NodeConfig = {
     block: string[];
+    block_ips?: string[];
+    block_protocols?: string[];
     dns: NodeDNS[];
     ip_strategy: string;
     node_pull_interval: number;
@@ -1153,6 +1155,7 @@ subscription URL does not carry them, in query-string form such as
     flow?: string;
     heartbeat?: number;
     host?: string;
+    ip_rules?: string[];
     multiplex?: string;
     name: string;
     password: string;
@@ -1165,6 +1168,7 @@ subscription URL does not carry them, in query-string form such as
     reality_short_id?: string;
     reduce_rtt?: boolean;
     rules: string[];
+    protocol_rules?: string[];
     security?: string;
     service_name?: string;
     settings?: string;
@@ -1601,6 +1605,8 @@ it was recorded. */
 
   type ServerNodeConfigOverride = {
     block: string[];
+    block_ips?: string[];
+    block_protocols?: string[];
     dns: NodeDNS[];
     inherit_block: boolean;
     inherit_dns: boolean;
@@ -1612,6 +1618,8 @@ it was recorded. */
 
   type ServerNodeConfigValues = {
     block: string[];
+    block_ips?: string[];
+    block_protocols?: string[];
     dns: NodeDNS[];
     ip_strategy: string;
     outbound: NodeOutbound[];
@@ -1989,6 +1997,8 @@ it was recorded. */
 
   type UpdateServerNodeConfigRequest = {
     block?: string[];
+    block_ips?: string[];
+    block_protocols?: string[];
     dns?: NodeDNS[];
     inherit_block?: boolean;
     inherit_dns?: boolean;

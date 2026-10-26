@@ -42,7 +42,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
-import { Textarea } from "@workspace/ui/components/textarea";
 import { ArrayInput } from "@workspace/ui/composed/dynamic-Inputs";
 import { Icon } from "@workspace/ui/composed/icon";
 import { cn } from "@workspace/ui/lib/utils";
@@ -57,9 +56,18 @@ import { toast } from "sonner";
 import { z } from "zod";
 import {
   normalizeOutboundConfig,
-  outboundConfigSchema,
+  outboundConfigForPayload,
+  outboundConfigListSchema,
 } from "./outbound-config";
 import { OutboundConfigInput } from "./outbound-config-input";
+import { RouteMatchGroupsEditor } from "./route-rule-editor";
+import {
+  domainRuleListSchema,
+  ipRuleListSchema,
+  normalizeRuleLines,
+  protocolRuleListSchema,
+  supportsStructuredRouteRules,
+} from "./route-rules";
 
 const dnsConfigSchema = z.object({
   proto: z.string(),
@@ -74,9 +82,11 @@ const serverNodeConfigSchema = z.object({
   inherit_dns: z.boolean(),
   dns: z.array(dnsConfigSchema),
   inherit_block: z.boolean(),
-  block: z.array(z.string()),
+  block: domainRuleListSchema,
+  block_ips: ipRuleListSchema,
+  block_protocols: protocolRuleListSchema,
   inherit_outbound: z.boolean(),
-  outbound: z.array(outboundConfigSchema),
+  outbound: outboundConfigListSchema,
 });
 
 type ServerNodeConfigFormData = z.infer<typeof serverNodeConfigSchema>;
@@ -170,6 +180,8 @@ function getFormValues(
   config: API.GetServerNodeConfigResponse
 ): ServerNodeConfigFormData {
   const { effective, override } = config;
+  const blockSource = override.inherit_block ? effective : override;
+  const outboundSource = override.inherit_outbound ? effective : override;
   return {
     inherit_ip_strategy: override.inherit_ip_strategy,
     ip_strategy: normalizeIPStrategy(
@@ -180,13 +192,13 @@ function getFormValues(
     inherit_dns: override.inherit_dns,
     dns: override.inherit_dns ? effective.dns || [] : override.dns || [],
     inherit_block: override.inherit_block,
-    block: override.inherit_block
-      ? effective.block || []
-      : override.block || [],
+    block: normalizeRuleLines(blockSource.block),
+    block_ips: normalizeRuleLines(blockSource.block_ips),
+    block_protocols: normalizeRuleLines(blockSource.block_protocols),
     inherit_outbound: override.inherit_outbound,
-    outbound: override.inherit_outbound
-      ? effective.outbound || []
-      : override.outbound || [],
+    outbound: (outboundSource.outbound || []).map((item) =>
+      normalizeOutboundConfig(item)
+    ),
   };
 }
 
@@ -219,6 +231,8 @@ export default function ServerNodeConfig({ server }: { server: API.Server }) {
       dns: [],
       inherit_block: true,
       block: [],
+      block_ips: [],
+      block_protocols: [],
       inherit_outbound: true,
       outbound: [],
     },
@@ -234,6 +248,9 @@ export default function ServerNodeConfig({ server }: { server: API.Server }) {
   const inheritOutbound = form.watch("inherit_outbound");
   const inheritBlock = form.watch("inherit_block");
   const { isDirty } = form.formState;
+  const structuredRulesSupported = supportsStructuredRouteRules(
+    cfgResp?.global as unknown as Record<string, unknown> | undefined
+  );
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen && cfgResp) {
@@ -251,17 +268,26 @@ export default function ServerNodeConfig({ server }: { server: API.Server }) {
   async function onSubmit(values: ServerNodeConfigFormData) {
     setSaving(true);
     try {
-      await updateServerNodeConfig({
+      const payload: Record<string, unknown> = {
         server_id: server.id,
         inherit_ip_strategy: values.inherit_ip_strategy,
         ip_strategy: values.ip_strategy,
         inherit_dns: values.inherit_dns,
         dns: values.dns,
         inherit_block: values.inherit_block,
-        block: values.block,
+        block: normalizeRuleLines(values.block),
         inherit_outbound: values.inherit_outbound,
-        outbound: values.outbound.map((item) => normalizeOutboundConfig(item)),
-      });
+        outbound: values.outbound.map((item) =>
+          outboundConfigForPayload(item, structuredRulesSupported)
+        ),
+      };
+      if (structuredRulesSupported) {
+        payload.block_ips = normalizeRuleLines(values.block_ips);
+        payload.block_protocols = normalizeRuleLines(values.block_protocols);
+      }
+      await updateServerNodeConfig(
+        payload as API.UpdateServerNodeConfigRequest
+      );
       toast.success(t("server_node_config.saveSuccess", "Saved successfully"));
       await refetch();
       setOpen(false);
@@ -637,6 +663,9 @@ export default function ServerNodeConfig({ server }: { server: API.Server }) {
                                         )
                                       );
                                     }}
+                                    structuredRulesSupported={
+                                      structuredRulesSupported
+                                    }
                                     value={field.value || []}
                                   />
                                 </FormControl>
@@ -674,8 +703,13 @@ export default function ServerNodeConfig({ server }: { server: API.Server }) {
                           <InheritedPreview
                             description={t(
                               "server_node_config.global_block_summary",
-                              "{{count}} block rules are provided by the global configuration.",
-                              { count: cfgResp.global.block?.length || 0 }
+                              "{{domains}} domain, {{ips}} IP, and {{protocols}} protocol block rules are provided by the global configuration.",
+                              {
+                                domains: cfgResp.global.block?.length || 0,
+                                ips: cfgResp.global.block_ips?.length || 0,
+                                protocols:
+                                  cfgResp.global.block_protocols?.length || 0,
+                              }
                             )}
                             title={t(
                               "server_node_config.globalPreview",
@@ -683,29 +717,30 @@ export default function ServerNodeConfig({ server }: { server: API.Server }) {
                             )}
                           />
                         ) : (
-                          <FormField
-                            control={form.control}
-                            name="block"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Textarea
-                                    onChange={(e) => {
-                                      field.onChange(
-                                        splitLines(e.target.value)
-                                      );
-                                    }}
-                                    placeholder={t(
-                                      "server_config.fields.block_rules_placeholder",
-                                      "One domain rule per line"
-                                    )}
-                                    rows={12}
-                                    value={(field.value || []).join("\n")}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
+                          <RouteMatchGroupsEditor
+                            domains={form.watch("block")}
+                            ips={form.watch("block_ips")}
+                            onDomainsChange={(value) =>
+                              form.setValue("block", value, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            onIPsChange={(value) =>
+                              form.setValue("block_ips", value, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            onProtocolsChange={(value) =>
+                              form.setValue("block_protocols", value, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            protocols={form.watch("block_protocols")}
+                            showCapabilityNotice
+                            structuredRulesSupported={structuredRulesSupported}
                           />
                         )}
                       </section>

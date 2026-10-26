@@ -40,12 +40,24 @@ test("fork releases are tag-gated and use the built-in repository token", async 
   assert.doesNotMatch(workflow, /secrets\.GH_TOKEN/);
   assert.doesNotMatch(workflow, /types:\s*\[published\]/);
   assert.match(workflow, /bash scripts\/build-release\.sh/);
+  assert.match(
+    workflow,
+    /name: Run workspace Biome checks\n\s+run: bun run check/
+  );
+  assert.ok(
+    workflow.indexOf("run: bun run check") <
+      workflow.indexOf("name: Test applications"),
+    "Biome checks must run before release tests and builds"
+  );
   assert.match(workflow, /cd packages\/ui && NODE_ENV=test bun run test/);
   assert.match(
     workflow,
     /bun test tests\/functions\/pages-proxy\.test\.ts tests\/functions\/api-dev-proxy\.test\.ts/
   );
   assert.match(workflow, /scripts\/release-dist-privacy\.test\.mjs/);
+  assert.match(workflow, /scripts\/swagger-contract\.test\.mjs/);
+  assert.match(workflow, /scripts\/openapi-source-contract\.test\.mjs/);
+  assert.match(workflow, /scripts\/openapi-generator-contract\.test\.mjs/);
   for (const asset of [
     "ppanel-admin-web.tar.gz",
     "ppanel-user-web.tar.gz",

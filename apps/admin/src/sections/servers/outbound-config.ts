@@ -10,6 +10,16 @@ import {
   TUIC_CONGESTION,
   XHTTP_MODES,
 } from "./form-schema";
+import {
+  canonicalizeRouteRules,
+  domainRuleListSchema,
+  ipRuleListSchema,
+  MAX_PERSISTED_JSON_BYTES,
+  normalizeRuleLines,
+  protocolRuleListSchema,
+  serializedJSONByteLength,
+  utf8ByteLength,
+} from "./route-rules";
 
 export const OUTBOUND_PROTOCOLS = [
   { label: "HTTP", value: "http" },
@@ -37,46 +47,169 @@ const OUTBOUND_SECURITY = {
 
 const text = z.string().optional();
 
-export const outboundConfigSchema = z.object({
-  name: z.string(),
-  protocol: z.string(),
-  address: z.string(),
-  port: z.number(),
-  user: text,
-  password: z.string(),
-  uuid: text,
-  cipher: text,
-  security: text,
-  sni: text,
-  alpn: z.array(z.string()).optional(),
-  allow_insecure: z.boolean().optional(),
-  fingerprint: text,
-  reality_public_key: text,
-  reality_short_id: text,
-  transport: text,
-  host: text,
-  path: text,
-  service_name: text,
-  xhttp_mode: text,
-  xhttp_extra: text,
-  flow: text,
-  encryption: text,
-  encryption_mode: text,
-  encryption_rtt: text,
-  encryption_client_padding: text,
-  encryption_password: text,
-  multiplex: text,
-  uot: z.boolean().optional(),
-  uot_version: z.number().optional(),
-  congestion_controller: text,
-  udp_stream: z.boolean().optional(),
-  reduce_rtt: z.boolean().optional(),
-  heartbeat: z.number().optional(),
-  settings: text,
-  rules: z.array(z.string()),
-});
+export const outboundConfigSchema = z
+  .object({
+    name: z.string(),
+    protocol: z.string(),
+    address: z.string(),
+    port: z.number(),
+    user: text,
+    password: z.string(),
+    uuid: text,
+    cipher: text,
+    security: text,
+    sni: text,
+    alpn: z.array(z.string()).optional(),
+    allow_insecure: z.boolean().optional(),
+    fingerprint: text,
+    reality_public_key: text,
+    reality_short_id: text,
+    transport: text,
+    host: text,
+    path: text,
+    service_name: text,
+    xhttp_mode: text,
+    xhttp_extra: text,
+    flow: text,
+    encryption: text,
+    encryption_mode: text,
+    encryption_rtt: text,
+    encryption_client_padding: text,
+    encryption_password: text,
+    multiplex: text,
+    uot: z.boolean().optional(),
+    uot_version: z.number().optional(),
+    congestion_controller: text,
+    udp_stream: z.boolean().optional(),
+    reduce_rtt: z.boolean().optional(),
+    heartbeat: z.number().optional(),
+    settings: text,
+    rules: domainRuleListSchema,
+    ip_rules: ipRuleListSchema,
+    protocol_rules: protocolRuleListSchema,
+  })
+  .loose();
 
 export type OutboundConfigFormData = z.infer<typeof outboundConfigSchema>;
+export const MAX_NODE_OUTBOUNDS = 128;
+export const MAX_OUTBOUND_AGGREGATE_RULES = 4096;
+export const MAX_OUTBOUND_AGGREGATE_RULE_BYTES = 48 * 1024;
+
+const REQUIRED_PERSISTED_OUTBOUND_FIELDS = new Set([
+  "name",
+  "protocol",
+  "address",
+  "port",
+  "password",
+  "rules",
+  "ip_rules",
+  "protocol_rules",
+]);
+
+export type OutboundNameIssue = {
+  code: "duplicate" | "empty";
+  index: number;
+  name: string;
+};
+export type OutboundCollectionIssueCode =
+  | "outboundAggregateBytes"
+  | "outboundAggregateRules"
+  | "outboundSerializedTooLarge"
+  | "tooManyOutbounds";
+
+export function validateOutboundNames(
+  values: Pick<OutboundConfigFormData, "name">[]
+): OutboundNameIssue[] {
+  const firstIndexByName = new Map<string, number>();
+  const issues: OutboundNameIssue[] = [];
+  for (const [index, item] of values.entries()) {
+    const name = item.name.trim();
+    if (!name) {
+      issues.push({ code: "empty", index, name });
+      continue;
+    }
+    const firstIndex = firstIndexByName.get(name);
+    if (firstIndex === undefined) {
+      firstIndexByName.set(name, index);
+      continue;
+    }
+    if (!issues.some((issue) => issue.index === firstIndex)) {
+      issues.push({ code: "duplicate", index: firstIndex, name });
+    }
+    issues.push({ code: "duplicate", index, name });
+  }
+  return issues;
+}
+
+function outboundPersistenceProjection(item: OutboundConfigFormData) {
+  return Object.fromEntries(
+    Object.entries(item).filter(([field, value]) => {
+      if (REQUIRED_PERSISTED_OUTBOUND_FIELDS.has(field)) return true;
+      if (value === "" || value === false || value === 0 || value == null) {
+        return false;
+      }
+      return !(Array.isArray(value) && value.length === 0);
+    })
+  );
+}
+
+function canonicalOutboundRoutes(item: OutboundConfigFormData) {
+  return {
+    ...item,
+    name: item.name.trim(),
+    rules: canonicalizeRouteRules("domain", item.rules),
+    ip_rules: canonicalizeRouteRules("ip", item.ip_rules),
+    protocol_rules: canonicalizeRouteRules("protocol", item.protocol_rules),
+  };
+}
+
+export function validateOutboundCollection(
+  values: OutboundConfigFormData[]
+): OutboundCollectionIssueCode[] {
+  const issues: OutboundCollectionIssueCode[] = [];
+  const canonicalValues = values.map(canonicalOutboundRoutes);
+  const rules = canonicalValues.flatMap((item) => [
+    ...item.rules,
+    ...item.ip_rules,
+    ...item.protocol_rules,
+  ]);
+  if (values.length > MAX_NODE_OUTBOUNDS) issues.push("tooManyOutbounds");
+  if (rules.length > MAX_OUTBOUND_AGGREGATE_RULES) {
+    issues.push("outboundAggregateRules");
+  }
+  if (
+    rules.reduce((total, rule) => total + utf8ByteLength(rule), 0) >
+    MAX_OUTBOUND_AGGREGATE_RULE_BYTES
+  ) {
+    issues.push("outboundAggregateBytes");
+  }
+  if (
+    serializedJSONByteLength(
+      canonicalValues.map(outboundPersistenceProjection)
+    ) >= MAX_PERSISTED_JSON_BYTES
+  ) {
+    issues.push("outboundSerializedTooLarge");
+  }
+  return issues;
+}
+
+export const outboundConfigListSchema = z
+  .array(outboundConfigSchema)
+  .superRefine((values, context) => {
+    for (const issue of validateOutboundNames(values)) {
+      context.addIssue({
+        code: "custom",
+        message:
+          issue.code === "empty"
+            ? "outboundNameEmpty"
+            : "outboundNameDuplicate",
+        path: [issue.index, "name"],
+      });
+    }
+    for (const code of validateOutboundCollection(values)) {
+      context.addIssue({ code: "custom", message: code, path: [] });
+    }
+  });
 export type OutboundFieldGroup =
   | "basic"
   | "auth"
@@ -103,13 +236,6 @@ export type OutboundFieldConfig = {
 
 const UOT_PROTOCOLS = ["shadowsocks", "vmess", "vless", "trojan", "anytls"];
 const MUX_PROTOCOLS = ["vmess", "vless", "trojan"];
-
-function splitLines(value: string) {
-  return value
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 function numberOrZero(value: unknown) {
   const number = Number(value);
@@ -178,7 +304,8 @@ export function normalizeOutboundConfig(
     : "none";
 
   return {
-    name: item.name || "",
+    ...item,
+    name: typeof item.name === "string" ? item.name.trim() : "",
     protocol,
     address: item.address || "",
     port: numberOrZero(item.port),
@@ -222,14 +349,25 @@ export function normalizeOutboundConfig(
     reduce_rtt: protocol === "tuic" && Boolean(item.reduce_rtt),
     heartbeat:
       protocol === "tuic" ? numberOrUndefined(item.heartbeat) : undefined,
-    settings: protocol === "hysteria2" ? item.settings || "" : "",
-    rules:
-      typeof item.rules === "string"
-        ? splitLines(item.rules)
-        : Array.isArray(item.rules)
-          ? item.rules
-          : [],
+    settings: typeof item.settings === "string" ? item.settings : "",
+    rules: normalizeRuleLines(item.rules),
+    ip_rules: normalizeRuleLines(item.ip_rules),
+    protocol_rules: normalizeRuleLines(item.protocol_rules),
   };
+}
+
+export function outboundConfigForPayload(
+  item: Record<string, any>,
+  structuredRulesSupported: boolean
+) {
+  const payload: Record<string, unknown> = canonicalOutboundRoutes(
+    normalizeOutboundConfig(item)
+  );
+  if (!structuredRulesSupported) {
+    Reflect.deleteProperty(payload, "ip_rules");
+    Reflect.deleteProperty(payload, "protocol_rules");
+  }
+  return payload;
 }
 
 export function createOutboundConfig(
@@ -242,6 +380,8 @@ export function createOutboundConfig(
     port: 0,
     password: "",
     rules: [],
+    ip_rules: [],
+    protocol_rules: [],
   });
 }
 
@@ -250,6 +390,10 @@ export function outboundValueForInput(item: OutboundConfigFormData) {
     ...item,
     alpn: Array.isArray(item.alpn) ? item.alpn.join("\n") : "",
     rules: Array.isArray(item.rules) ? item.rules.join("\n") : "",
+    ip_rules: Array.isArray(item.ip_rules) ? item.ip_rules.join("\n") : "",
+    protocol_rules: Array.isArray(item.protocol_rules)
+      ? item.protocol_rules.join("\n")
+      : "",
   };
 }
 
@@ -595,17 +739,6 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       className: "col-span-2",
       placeholder: '{"up_mbps":100,"down_mbps":100}',
       visible: protocolIs("hysteria2"),
-    },
-    {
-      name: "rules",
-      type: "textarea",
-      label: t("server_config.tabs.outbound", "Outbound Rules"),
-      group: "routing",
-      className: "col-span-2",
-      placeholder: t(
-        "server_config.fields.outbound_rules_placeholder",
-        "One rule per line"
-      ),
     },
   ];
 }
