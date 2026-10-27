@@ -128,6 +128,52 @@ afterEach(() => {
 });
 
 describe("global structured block rules", () => {
+  it("preserves a long regex through tab switches, save and reopen", async () => {
+    const rule = `regexp:(?i)(^|\\.)(tracker|announce|scrape|${"long-alternative".repeat(60)})\\.example$`;
+    mocks.config.block = [rule];
+    render(<ServerConfig />);
+    openConfig();
+    const editor = screen.getByRole("textbox", {
+      name: "Domain / GeoSite / RE2 Regex",
+    }) as HTMLTextAreaElement;
+    expect(editor.value).toBe(rule);
+    expect(editor.getAttribute("wrap")).toBe("soft");
+    expect(editor.className).toContain("field-sizing-fixed");
+    const edited = `${rule}\nfull:example.org`;
+    fireEvent.change(editor, { target: { value: edited } });
+    for (const name of [
+      "Basic Configuration",
+      "DNS Configuration",
+      "Outbound Rules",
+      "Block Rules",
+    ]) {
+      const tab = screen.getByRole("tab", { name });
+      fireEvent.mouseDown(tab);
+      fireEvent.click(tab);
+    }
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "Domain / GeoSite / RE2 Regex",
+        }) as HTMLTextAreaElement
+      ).value
+    ).toBe(edited);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mocks.updateConfig).toHaveBeenCalledTimes(1));
+    expect(mocks.updateConfig.mock.calls[0]?.[0].block).toEqual([
+      rule,
+      "full:example.org",
+    ]);
+    openConfig();
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "Domain / GeoSite / RE2 Regex",
+        }) as HTMLTextAreaElement
+      ).value
+    ).toBe(edited);
+  });
+
   it("saves normalized three-category payloads and reopens exact values", async () => {
     render(<ServerConfig />);
     openConfig();

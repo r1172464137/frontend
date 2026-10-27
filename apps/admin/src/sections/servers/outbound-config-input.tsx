@@ -449,7 +449,7 @@ export function OutboundConfigInput({
               key={rowIDs.current[index]!}
             >
               <AccordionItem
-                className="flex-1 rounded-lg border"
+                className="min-w-0 flex-1 rounded-lg border"
                 value={String(index)}
               >
                 <AccordionTrigger className="px-4 py-3 hover:no-underline">
@@ -475,7 +475,7 @@ export function OutboundConfigInput({
                     {FIELD_GROUPS.map((group) =>
                       renderGroup(item, index, group)
                     )}
-                    <fieldset className="rounded-lg border border-border">
+                    <fieldset className="min-w-0 rounded-lg border border-border">
                       <legend className="ml-3 bg-background px-1 py-1 font-medium text-foreground text-sm">
                         {t("routing", "Routing")}
                       </legend>

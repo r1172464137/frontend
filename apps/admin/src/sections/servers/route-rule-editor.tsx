@@ -48,7 +48,10 @@ function RuleErrors({ issues }: { issues: RouteRuleIssue[] }) {
   const { t } = useTranslation("servers");
   if (issues.length === 0) return null;
   return (
-    <div className="space-y-1 text-destructive text-xs" role="alert">
+    <div
+      className="space-y-1 break-words text-destructive text-xs [overflow-wrap:anywhere]"
+      role="alert"
+    >
       {issues.map((issue) => (
         <p key={`${issue.index}-${issue.code}`}>
           {t(`route_rules.errors.${issue.code}`, ERROR_FALLBACKS[issue.code], {
@@ -99,17 +102,19 @@ function RuleTextarea({
   }
 
   return (
-    <section className="space-y-2 rounded-lg border p-4">
+    <section className="min-w-0 space-y-2 rounded-lg border p-4">
       <Label htmlFor={id}>{label}</Label>
       <p className="text-muted-foreground text-xs">{description}</p>
       <Textarea
         aria-invalid={issues.length > 0}
+        className="field-sizing-fixed max-w-full"
         disabled={disabled}
         id={id}
         onChange={(event) => handleChange(event.target.value)}
         placeholder={placeholder}
         rows={6}
         value={draft}
+        wrap="soft"
       />
       <RuleErrors issues={issues} />
     </section>
@@ -169,7 +174,7 @@ export function RouteMatchGroupsEditor({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       {showCapabilityNotice && !structuredRulesSupported ? (
         <StructuredRulesCapabilityNotice />
       ) : null}

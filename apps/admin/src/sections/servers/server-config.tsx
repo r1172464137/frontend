@@ -207,9 +207,9 @@ export default function ServerConfig() {
           </SheetTitle>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100dvh-48px-36px-36px-env(safe-area-inset-top))] px-6">
+        <ScrollArea className="[&_[data-slot=scroll-area-viewport]>div]:!block min-h-0 min-w-0 flex-1 px-6">
           <Tabs className="pt-4" defaultValue="basic">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid h-auto w-full grid-cols-4 [&_[role=tab]]:h-auto [&_[role=tab]]:min-w-0 [&_[role=tab]]:whitespace-normal">
               <TabsTrigger value="basic">
                 {t("server_config.tabs.basic", "Basic Configuration")}
               </TabsTrigger>

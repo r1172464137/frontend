@@ -324,7 +324,7 @@ export default function ServerNodeConfig({ server }: { server: API.Server }) {
           </div>
         </SheetHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="[&_[data-slot=scroll-area-viewport]>div]:!block min-h-0 min-w-0 flex-1">
           <div className="px-4 pb-4">
             {isLoading && !cfgResp ? (
               <div className="space-y-4 pt-4" role="status">
