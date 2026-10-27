@@ -1,5 +1,5 @@
 const NODE_REPOSITORY = "r1172464137/ppanel-node";
-const NODE_VERSION = "v1.1.14";
+const NODE_VERSION = "v1.1.15";
 const INSTALLER_URL = `https://github.com/${NODE_REPOSITORY}/releases/download/${NODE_VERSION}/install.sh`;
 
 function shellQuote(value: string | number) {

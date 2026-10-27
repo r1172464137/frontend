@@ -18,6 +18,23 @@ This document records all notable changes to ShadCN Admin.
 
 ---
 
+## [1.22.3](https://github.com/r1172464137/frontend/releases/tag/v1.22.3) (2026-10-27)
+
+### ✨ Features / 新功能
+
+- Add structured Domain/GeoSite/RE2, IP/GeoIP/CIDR, and BitTorrent matchers to global blocks, per-server overrides, and ordered custom outbounds.
+- Preserve legacy route fields and backend-only outbound settings across save, reopen, rename, insert, delete, and reorder operations.
+
+### 🔒 Privacy / 隐私
+
+- Remove remote sponsor cards and supplier API fallbacks; keep tutorials disabled or same-origin.
+- Bundle Monaco, icons, flags, and Lottie locally and scan every release candidate for prohibited runtime fallbacks.
+
+### 👷 CI/CD
+
+- Keep fork OpenAPI specifications when no private automation webhook is configured.
+- Verify Swagger compatibility, privacy contracts, and final release artifacts in clean runners.
+
 
 ## [1.22.2](https://github.com/r1172464137/frontend/releases/tag/v1.22.2) (2026-10-25)
 

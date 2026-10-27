@@ -102,11 +102,13 @@ jobs:
             release/ppanel-user-web.zip
             release/SHA256SUMS
           body: |
-            ## REALITY target PROXY protocol
+            ## Structured routing and private runtime assets
 
-            Adds a per-protocol REALITY target PROXY selector (`reality_xver`: 0/1/2), independent of inbound PROXY reception. The native PPanel form preserves numeric values and omits the removed explanatory paragraph.
+            Adds structured Domain/GeoSite/RE2, IP/GeoIP/CIDR, and BitTorrent matchers for global blocks, per-server overrides, and ordered custom outbounds. Existing REALITY target PROXY (`reality_xver`) and inbound PROXY reception remain independent and fully supported.
 
-            Use backend `v1.20.4` and ppnode `v1.1.14` from the corresponding r1172464137 forks for target-side PROXY support. Ordinary targets remain at 0 by default.
+            Use backend `v1.20.5` and ppnode `v1.1.15` from the matching r1172464137 fork releases. The node release carries pinned executable-relative GeoIP/GeoSite assets required by structured matchers.
+
+            Remote sponsor cards and supplier fallbacks are removed. Tutorials are disabled by default unless a same-origin snapshot is configured; Monaco, icons, flags, and Lottie load locally.
 
             | Artifact | API route shape |
             | --- | --- |

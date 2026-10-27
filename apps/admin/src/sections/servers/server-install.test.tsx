@@ -60,7 +60,7 @@ describe("server install dialog", () => {
     );
     expect(command.readOnly).toBe(true);
     expect(command.value).toContain(
-      "https://github.com/r1172464137/ppanel-node/releases/download/v1.1.14/install.sh"
+      "https://github.com/r1172464137/ppanel-node/releases/download/v1.1.15/install.sh"
     );
     const editedHost =
       "https://edited.example.test/a'b; printf HOST_INJECTION; #";
