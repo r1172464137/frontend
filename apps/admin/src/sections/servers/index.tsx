@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@workspace/ui/components/alert";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -20,10 +25,8 @@ import {
   postServerCreate as createServer,
   postServerOpenApiDelete as deleteServer,
   getServerList as filterServerList,
-  getServerNodeConfig,
   postServerServerSort as resetSortWithServer,
   postServerUpdate as updateServer,
-  postServerNodeConfigUpdate as updateServerNodeConfig,
 } from "@workspace/ui/services/admin/admin";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -33,6 +36,11 @@ import { useServer } from "@/stores/server";
 import DynamicMultiplier from "./dynamic-multiplier";
 import OnlineUsersCell from "./online-users-cell";
 import ServerConfig from "./server-config";
+import {
+  applyServerCopy,
+  beginServerCopy,
+  type ServerCopyTask,
+} from "./server-copy";
 import ServerForm from "./server-form";
 import ServerInstall from "./server-install";
 import ServerNodeConfig from "./server-node-config";
@@ -97,6 +105,7 @@ function ServerMoreActions({
   onEdit,
   onCopy,
   onDelete,
+  copyBlocked,
 }: {
   server: API.Server;
   loading: boolean;
@@ -104,6 +113,7 @@ function ServerMoreActions({
   onEdit: (values: Partial<API.Server>) => Promise<boolean>;
   onCopy: () => Promise<void>;
   onDelete: () => Promise<void>;
+  copyBlocked: boolean;
 }) {
   const { t } = useTranslation("servers");
   const editRef = useRef<HTMLButtonElement>(null);
@@ -141,7 +151,7 @@ function ServerMoreActions({
             <Icon icon="mdi:console-line" />
             {t("connect", "Connect")}
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={loading} onSelect={onCopy}>
+          <DropdownMenuItem disabled={loading || copyBlocked} onSelect={onCopy}>
             <Icon icon="mdi:content-copy" />
             {t("copy", "Copy")}
           </DropdownMenuItem>
@@ -193,69 +203,190 @@ export default function Servers() {
   const { fetchServers } = useServer();
 
   const [loading, setLoading] = useState(false);
+  const [copyState, setCopyState] = useState<
+    | { kind: "partial" | "working"; task: ServerCopyTask }
+    | { kind: "unknown"; sourceName: string }
+  >();
   const ref = useRef<ProTableActions>(null);
+  const copyLock = useRef(false);
+  const copyUnresolved = useRef(false);
 
-  async function copyServer(row: API.Server) {
-    setLoading(true);
-    const {
-      id: _id,
-      created_at: _created_at,
-      updated_at: _updated_at,
-      last_reported_at: _last_reported_at,
-      status: _status,
-      ...others
-    } = row as Record<string, unknown>;
-    const body: API.CreateServerRequest = {
-      name: others.name as string,
-      country: others.country as string,
-      city: others.city as string,
-      address: others.address as string,
-      protocols: (others.protocols as API.Protocol[]) || [],
-    };
+  function refreshServers() {
+    ref.current?.refresh();
+    fetchServers();
+  }
+  async function finishCopy(task: ServerCopyTask) {
+    let complete = false;
     try {
-      const [createResp, configResp] = await Promise.all([
-        createServer(body),
-        getServerNodeConfig({ server_id: row.id }),
-      ]);
-      const createData = createResp.data as API.ResponseSuccessBean & {
-        data?: { id?: number };
-      };
-      const newServerId = createData.data?.id;
-      const config = configResp.data?.data;
-      const override = config?.override;
-
-      if (newServerId && override) {
-        await updateServerNodeConfig({
-          server_id: newServerId,
-          inherit_ip_strategy: override.inherit_ip_strategy,
-          ip_strategy: override.ip_strategy,
-          inherit_dns: override.inherit_dns,
-          dns: override.dns || [],
-          inherit_block: override.inherit_block,
-          block: override.block || [],
-          ...(config?.global &&
-          Object.hasOwn(config.global, "block_ips") &&
-          Object.hasOwn(config.global, "block_protocols")
-            ? {
-                block_ips: override.block_ips || [],
-                block_protocols: override.block_protocols || [],
-              }
-            : {}),
-          inherit_outbound: override.inherit_outbound,
-          outbound: override.outbound || [],
-        });
+      complete = await applyServerCopy(task);
+    } catch {
+      complete = false;
+    }
+    if (complete) {
+      copyUnresolved.current = false;
+      setCopyState(undefined);
+      toast.success(
+        t(
+          "ordered_routing.copy_saved",
+          "Copied and verified in the panel; node application is not yet confirmed."
+        )
+      );
+      refreshServers();
+    } else setCopyState({ kind: "partial", task });
+  }
+  async function copyServer(row: API.Server) {
+    if (loading || copyUnresolved.current || copyLock.current) return;
+    copyLock.current = true;
+    setLoading(true);
+    let createdTask: ServerCopyTask | undefined;
+    try {
+      const result = await beginServerCopy(row);
+      if (result.kind === "source_error" || result.kind === "invalid_source") {
+        toast.error(
+          t(
+            "ordered_routing.copy_source_error",
+            "Cannot copy this server: its node configuration is unavailable or invalid. No server was created."
+          )
+        );
+      } else if (result.kind === "create_unknown") {
+        copyUnresolved.current = true;
+        setCopyState({ kind: "unknown", sourceName: row.name });
+        refreshServers();
+      } else {
+        createdTask = result.task;
+        copyUnresolved.current = true;
+        setCopyState({ kind: "working", task: result.task });
+        refreshServers();
+        await finishCopy(result.task);
       }
-
-      toast.success(t("copied", "Copied"));
-      ref.current?.refresh();
-      fetchServers();
+    } catch {
+      if (createdTask) setCopyState({ kind: "partial", task: createdTask });
+      else if (!copyUnresolved.current)
+        toast.error(
+          t(
+            "ordered_routing.copy_source_error",
+            "Cannot copy this server: its node configuration is unavailable or invalid. No server was created."
+          )
+        );
     } finally {
+      copyLock.current = false;
+      setLoading(false);
+    }
+  }
+  async function retryCopy(task: ServerCopyTask) {
+    if (loading || copyLock.current) return;
+    copyLock.current = true;
+    setLoading(true);
+    setCopyState({ kind: "working", task });
+    try {
+      await finishCopy(task);
+    } catch {
+      setCopyState({ kind: "partial", task });
+    } finally {
+      copyLock.current = false;
       setLoading(false);
     }
   }
 
   return (
     <div className="space-y-4">
+      {copyState ? (
+        <Alert
+          role={copyState.kind === "working" ? "status" : "alert"}
+          variant={copyState.kind === "working" ? "default" : "destructive"}
+        >
+          <AlertTitle className="line-clamp-none">
+            {copyState.kind === "unknown"
+              ? t(
+                  "ordered_routing.copy_unknown_title",
+                  "Create result for {{name}} is unknown (server ID not confirmed).",
+                  { name: copyState.sourceName }
+                )
+              : copyState.kind === "working"
+                ? t(
+                    "ordered_routing.copy_progress_title",
+                    "Server created (ID {{id}}, {{name}}); copying configuration…",
+                    {
+                      id: copyState.task.target.id,
+                      name: copyState.task.target.name,
+                    }
+                  )
+                : t(
+                    "ordered_routing.copy_partial_title",
+                    "Server created (ID {{id}}, {{name}}), but configuration copy is incomplete.",
+                    {
+                      id: copyState.task.target.id,
+                      name: copyState.task.target.name,
+                    }
+                  )}
+          </AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>
+              {copyState.kind === "unknown"
+                ? t(
+                    "ordered_routing.copy_unknown_desc",
+                    "A successful response without a valid ID violates the backend contract. The request may have created a server; check the list before copying again. Creation will not be retried automatically."
+                  )
+                : copyState.kind === "working"
+                  ? t(
+                      "ordered_routing.copy_progress_desc",
+                      "Copying and verifying the target configuration. Please wait."
+                    )
+                  : t(
+                      "ordered_routing.copy_partial_desc",
+                      "Retry applies the original DNS, IP strategy and routing to this existing server; it never creates another server. Verify any manual changes before retrying."
+                    )}
+            </p>
+            {copyState.kind !== "working" ? (
+              <div className="flex flex-wrap gap-2">
+                {copyState.kind === "partial" ? (
+                  <>
+                    <Button
+                      disabled={loading}
+                      onClick={() => retryCopy(copyState.task)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      {t("ordered_routing.copy_retry", "Retry configuration")}
+                    </Button>
+                    <ServerNodeConfig
+                      server={copyState.task.target}
+                      triggerDisabled={loading}
+                      triggerLabel={t(
+                        "ordered_routing.copy_edit",
+                        "Edit configuration"
+                      )}
+                    />
+                  </>
+                ) : (
+                  <Button
+                    disabled={loading}
+                    onClick={refreshServers}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("ordered_routing.copy_refresh", "Refresh server list")}
+                  </Button>
+                )}
+                <Button
+                  disabled={loading}
+                  onClick={() => {
+                    copyUnresolved.current = false;
+                    setCopyState(undefined);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {t("ordered_routing.copy_dismiss", "Dismiss after checking")}
+                </Button>
+              </div>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <DynamicMultiplier />
         <ServerConfig />
@@ -266,6 +397,7 @@ export default function Servers() {
           render: (row) => [
             <ServerNodeConfig key="node-config" server={row} />,
             <ServerMoreActions
+              copyBlocked={Boolean(copyState)}
               key="more"
               loading={loading}
               onCopy={() => copyServer(row)}

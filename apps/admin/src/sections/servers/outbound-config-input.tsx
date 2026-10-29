@@ -6,13 +6,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@workspace/ui/components/alert";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -31,37 +27,19 @@ import {
   CirclePlusIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { newRoutingID } from "./node-routing";
+import { validateOutboundCapability } from "./outbound-capability";
 import {
-  createOutboundConfig,
   getOutboundFields,
   getOutboundProtocolLabel,
   getOutboundSecurityOptions,
-  normalizeOutboundConfig,
-  type OutboundCollectionIssueCode,
-  type OutboundConfigFormData,
+  type OutboundConnection,
   type OutboundFieldConfig,
   type OutboundFieldGroup,
-  validateOutboundCollection,
   validateOutboundNames,
 } from "./outbound-config";
-import {
-  RouteMatchGroupsEditor,
-  StructuredRulesCapabilityNotice,
-} from "./route-rule-editor";
-
-const OUTBOUND_COLLECTION_ERROR_FALLBACKS: Record<
-  OutboundCollectionIssueCode,
-  string
-> = {
-  outboundAggregateBytes:
-    "Outbound route rules exceed 49152 aggregate UTF-8 bytes.",
-  outboundAggregateRules: "Outbound routing contains more than 4096 rules.",
-  outboundSerializedTooLarge:
-    "Serialized outbound configuration must be below 61440 UTF-8 bytes.",
-  tooManyOutbounds: "No more than 128 outbounds can be configured.",
-};
 
 const FIELD_GROUPS: {
   group: OutboundFieldGroup;
@@ -107,8 +85,49 @@ function splitLines(value: string) {
     .filter(Boolean);
 }
 
+function StringListInput({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  placeholder?: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const id = useId();
+  const serialized = value.join("\n");
+  const [draft, setDraft] = useState(serialized);
+  const lastEmitted = useRef(serialized);
+  useEffect(() => {
+    if (serialized !== lastEmitted.current) {
+      lastEmitted.current = serialized;
+      setDraft(serialized);
+    }
+  }, [serialized]);
+  return (
+    <>
+      <Label htmlFor={id}>{label}</Label>
+      <Textarea
+        className="min-h-24"
+        id={id}
+        onChange={(event) => {
+          const text = event.target.value;
+          const lines = splitLines(text);
+          setDraft(text);
+          lastEmitted.current = lines.join("\n");
+          onChange(lines);
+        }}
+        placeholder={placeholder}
+        value={draft}
+      />
+    </>
+  );
+}
+
 function getFieldValue(
-  item: OutboundConfigFormData,
+  item: OutboundConnection,
   field: OutboundFieldConfig
 ): string | number | boolean | string[] {
   const value = item[field.name];
@@ -127,22 +146,30 @@ function getFieldValue(
 }
 
 function getSelectOptions(
-  item: OutboundConfigFormData,
+  item: OutboundConnection,
   field: OutboundFieldConfig
 ) {
-  if (field.name === "security") {
+  if (field.name === "security")
     return getOutboundSecurityOptions(item.protocol);
-  }
+  if (field.name === "cipher" && item.protocol === "vmess")
+    return ["auto", "aes-128-gcm", "chacha20-poly1305"].map((value) => ({
+      label: value,
+      value,
+    }));
+  if (field.name === "transport" && item.security === "reality")
+    return (field.options || []).filter((option) =>
+      ["tcp", "grpc", "xhttp"].includes(option.value)
+    );
   return field.options || [];
 }
 
-function getItemTitle(item: OutboundConfigFormData, index: number) {
+function getItemTitle(item: OutboundConnection, index: number) {
   return (
     item.name || `${getOutboundProtocolLabel(item.protocol)} #${index + 1}`
   );
 }
 
-function getItemBadges(item: OutboundConfigFormData) {
+function getItemBadges(item: OutboundConnection) {
   return [
     getOutboundProtocolLabel(item.protocol),
     item.transport && !["tuic", "hysteria2"].includes(item.transport)
@@ -155,28 +182,24 @@ function getItemBadges(item: OutboundConfigFormData) {
   ].filter(Boolean);
 }
 
-function normalizeItems(values: OutboundConfigFormData[] = []) {
-  return values.map((item) => normalizeOutboundConfig(item));
-}
-
 export function OutboundConfigInput({
-  value = [],
+  value,
   onChange,
-  structuredRulesSupported = true,
+  deleteReason,
 }: {
-  value?: OutboundConfigFormData[];
-  onChange: (value: OutboundConfigFormData[]) => void;
-  structuredRulesSupported?: boolean;
+  value: API.NodeRoutingOutbound[];
+  onChange: (value: API.NodeRoutingOutbound[]) => void;
+  deleteReason: (id: string) => string | undefined;
 }) {
   const { t } = useTranslation("servers");
+  const [deleteError, setDeleteError] = useState("");
   const rowIDPrefix = useId();
   const nextRowID = useRef(value.length);
   const [accordionValue, setAccordionValue] = useState("");
   const rowIDs = useRef(value.map((_, index) => `${rowIDPrefix}-${index}`));
   const fields = getOutboundFields(t);
-  const items = normalizeItems(value);
+  const items = value;
   const outboundNameIssues = validateOutboundNames(items);
-  const outboundCollectionIssues = validateOutboundCollection(items);
 
   function allocateRowID() {
     const id = `${rowIDPrefix}-${nextRowID.current}`;
@@ -191,18 +214,35 @@ export function OutboundConfigInput({
     rowIDs.current.push(allocateRowID());
   }
 
-  function emit(nextItems: OutboundConfigFormData[]) {
-    onChange(normalizeItems(nextItems));
+  function emit(nextItems: API.NodeRoutingOutbound[]) {
+    onChange(nextItems);
   }
 
   function addItem() {
-    const nextItems = [...items, createOutboundConfig()];
+    const item = {
+      id: newRoutingID("ob"),
+      name: "",
+      protocol: "http",
+      address: "",
+      port: 0,
+      password: "",
+      rules: [],
+      ip_rules: [],
+      protocol_rules: [],
+    };
+    const nextItems = [...items, item];
     rowIDs.current.push(allocateRowID());
     emit(nextItems);
     setAccordionValue(String(nextItems.length - 1));
   }
 
   function deleteItem(index: number) {
+    const reason = deleteReason(items[index]?.id || "");
+    if (reason) {
+      setDeleteError(reason);
+      return;
+    }
+    setDeleteError("");
     rowIDs.current = rowIDs.current.filter((_, rowIndex) => rowIndex !== index);
     emit(items.filter((_, itemIndex) => itemIndex !== index));
     const activeIndex = Number(accordionValue);
@@ -229,27 +269,14 @@ export function OutboundConfigInput({
     setAccordionValue(String(destination));
   }
 
-  function updateRouteItem(
-    index: number,
-    field: "rules" | "ip_rules" | "protocol_rules",
-    fieldValue: string[]
-  ) {
-    emit(
-      items.map((item, itemIndex) =>
-        itemIndex === index
-          ? normalizeOutboundConfig({ ...item, [field]: fieldValue })
-          : item
-      )
-    );
-  }
-
   function updateItem(
     index: number,
     field: OutboundFieldConfig,
     fieldValue: string | number | boolean | string[]
   ) {
-    const current = items[index] || createOutboundConfig();
-    let next: Record<string, unknown>;
+    const current = items[index];
+    if (!current) return;
+    let next: API.NodeRoutingOutbound;
 
     if (field.name === "protocol") {
       next = {
@@ -259,22 +286,15 @@ export function OutboundConfigInput({
     } else {
       next = {
         ...current,
-        [field.name]:
-          field.name === "rules" || field.type === "string-list"
-            ? splitLines(String(fieldValue))
-            : fieldValue,
+        [field.name]: fieldValue,
       };
     }
 
-    emit(
-      items.map((item, i) =>
-        i === index ? normalizeOutboundConfig(next) : item
-      )
-    );
+    emit(items.map((item, i) => (i === index ? next : item)));
   }
 
   function renderField(
-    item: OutboundConfigFormData,
+    item: OutboundConnection,
     index: number,
     field: OutboundFieldConfig
   ) {
@@ -297,7 +317,7 @@ export function OutboundConfigInput({
     switch (field.type) {
       case "select": {
         const options = getSelectOptions(item, field);
-        if (options.length <= 1) {
+        if (options.length === 0) {
           return null;
         }
         return (
@@ -307,7 +327,7 @@ export function OutboundConfigInput({
               onValueChange={(nextValue) => updateItem(index, field, nextValue)}
               value={String(value || "")}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={field.label}>
                 <SelectValue placeholder={field.placeholder} />
               </SelectTrigger>
               <SelectContent>
@@ -329,6 +349,7 @@ export function OutboundConfigInput({
             key={field.name}
           >
             <Switch
+              aria-label={field.label}
               checked={Boolean(value)}
               onCheckedChange={(checked) => updateItem(index, field, checked)}
             />
@@ -336,17 +357,40 @@ export function OutboundConfigInput({
           </div>
         );
 
-      case "textarea":
       case "string-list":
+        return (
+          <div className={cn("space-y-2", field.className)} key={field.name}>
+            <StringListInput
+              label={field.label}
+              onChange={(lines) => updateItem(index, field, lines)}
+              placeholder={field.placeholder}
+              value={
+                Array.isArray(item[field.name])
+                  ? (item[field.name] as string[])
+                  : []
+              }
+            />
+          </div>
+        );
+      case "textarea":
         return (
           <div className={cn("space-y-2", field.className)} key={field.name}>
             <Label>{label}</Label>
             <Textarea
+              aria-label={field.label}
               className="min-h-24"
               onChange={(event) => updateItem(index, field, event.target.value)}
               placeholder={field.placeholder}
               value={String(value || "")}
             />
+            {field.name === "settings" ? (
+              <p className="text-muted-foreground text-xs">
+                {t(
+                  "ordered_routing.raw_settings_hint",
+                  "When non-empty, raw settings replace the projected connection fields. Include the complete settings for this protocol; the panel will not fill missing fields from the form."
+                )}
+              </p>
+            ) : null}
           </div>
         );
 
@@ -358,17 +402,32 @@ export function OutboundConfigInput({
         return (
           <div className={cn("space-y-2", field.className)} key={field.name}>
             <Label>{label}</Label>
-            <EnhancedInput
-              aria-invalid={Boolean(nameIssue)}
-              max={field.max}
-              min={field.min}
-              onValueChange={(nextValue) => updateItem(index, field, nextValue)}
-              placeholder={field.placeholder}
-              step={field.step}
-              suffix={field.suffix}
-              type={field.type === "number" ? "number" : "text"}
-              value={value}
-            />
+            {field.type === "number" ? (
+              <EnhancedInput
+                aria-invalid={Boolean(nameIssue)}
+                aria-label={field.label}
+                max={field.max}
+                min={field.min}
+                onValueChange={(nextValue) =>
+                  updateItem(index, field, nextValue)
+                }
+                placeholder={field.placeholder}
+                step={field.step}
+                suffix={field.suffix}
+                type="number"
+                value={value}
+              />
+            ) : (
+              <Input
+                aria-invalid={Boolean(nameIssue)}
+                aria-label={field.label}
+                onChange={(event) =>
+                  updateItem(index, field, event.target.value)
+                }
+                placeholder={field.placeholder}
+                value={String(value || "")}
+              />
+            )}
             {nameIssue ? (
               <p className="text-destructive text-xs" role="alert">
                 {nameIssue.code === "empty"
@@ -390,7 +449,7 @@ export function OutboundConfigInput({
   }
 
   function renderGroup(
-    item: OutboundConfigFormData,
+    item: OutboundConnection,
     index: number,
     group: (typeof FIELD_GROUPS)[number]
   ) {
@@ -418,22 +477,14 @@ export function OutboundConfigInput({
     <div className="space-y-3">
       <p className="text-muted-foreground text-xs">
         {t(
-          "route_rules.outbound_priority_description",
-          "Routing priority follows this top-to-bottom order; the first matching outbound wins."
+          "ordered_routing.connections_description",
+          "Connections are referenced by stable ID; their order does not affect routing."
         )}
       </p>
-      {structuredRulesSupported ? null : <StructuredRulesCapabilityNotice />}
-      {outboundCollectionIssues.length > 0 ? (
-        <div className="space-y-1 text-destructive text-xs" role="alert">
-          {outboundCollectionIssues.map((issue) => (
-            <p key={issue}>
-              {t(
-                `route_rules.${issue}`,
-                OUTBOUND_COLLECTION_ERROR_FALLBACKS[issue]
-              )}
-            </p>
-          ))}
-        </div>
+      {deleteError ? (
+        <p className="text-destructive text-sm" role="alert">
+          {deleteError}
+        </p>
       ) : null}
       {items.length > 0 && (
         <Accordion
@@ -475,45 +526,75 @@ export function OutboundConfigInput({
                     {FIELD_GROUPS.map((group) =>
                       renderGroup(item, index, group)
                     )}
-                    <fieldset className="min-w-0 rounded-lg border border-border">
-                      <legend className="ml-3 bg-background px-1 py-1 font-medium text-foreground text-sm">
-                        {t("routing", "Routing")}
-                      </legend>
-                      <div className="space-y-3 p-4 pt-2">
-                        <RouteMatchGroupsEditor
-                          domains={item.rules}
-                          ips={item.ip_rules}
-                          onDomainsChange={(rules) =>
-                            updateRouteItem(index, "rules", rules)
-                          }
-                          onIPsChange={(rules) =>
-                            updateRouteItem(index, "ip_rules", rules)
-                          }
-                          onProtocolsChange={(rules) =>
-                            updateRouteItem(index, "protocol_rules", rules)
-                          }
-                          protocols={item.protocol_rules}
-                          structuredRulesSupported={structuredRulesSupported}
-                        />
-                        {item.protocol === "socks" &&
-                        item.protocol_rules.includes("bittorrent") ? (
-                          <Alert>
-                            <AlertTitle>
+                    {validateOutboundCapability(item).length > 0 ? (
+                      <div
+                        className="space-y-2 rounded border border-destructive p-3 text-sm"
+                        role="alert"
+                      >
+                        <p>
+                          {t(
+                            "ordered_routing.unsupported_connection_hint",
+                            "This connection contains unsupported or incomplete settings. They are preserved but the routing package cannot be saved until corrected."
+                          )}
+                        </p>
+                        {validateOutboundCapability(item).map(
+                          (issue, issueIndex) => (
+                            <p
+                              key={`${issue.field}-${issue.code}-${issueIndex}`}
+                            >
+                              {issue.field}:{" "}
                               {t(
-                                "route_rules.socks_udp_title",
-                                "SOCKS5 UDP support required"
+                                `ordered_routing.errors.${issue.code}`,
+                                issue.code
                               )}
-                            </AlertTitle>
-                            <AlertDescription>
-                              {t(
-                                "route_rules.socks_udp_warning",
-                                "BitTorrent peer traffic can use µTP and DHT. The SOCKS5 server must support UDP Associate or that traffic will fail."
-                              )}
-                            </AlertDescription>
-                          </Alert>
+                            </p>
+                          )
+                        )}
+                        {validateOutboundCapability(item).some((issue) =>
+                          ["uot", "multiplex", "encryption", "plugin"].includes(
+                            issue.field
+                          )
+                        ) ? (
+                          <Button
+                            onClick={() => {
+                              const next = { ...item };
+                              const fieldsByIssue: Record<string, string[]> = {
+                                uot: ["uot", "uot_version"],
+                                multiplex: ["multiplex"],
+                                encryption: [
+                                  "encryption",
+                                  "encryption_mode",
+                                  "encryption_rtt",
+                                  "encryption_ticket",
+                                  "encryption_client_padding",
+                                  "encryption_password",
+                                ],
+                                plugin: ["plugin", "plugin_opts"],
+                              };
+                              for (const issue of validateOutboundCapability(
+                                item
+                              ))
+                                for (const field of fieldsByIssue[
+                                  issue.field
+                                ] || [])
+                                  Reflect.deleteProperty(next, field);
+                              emit(
+                                items.map((candidate, i) =>
+                                  i === index ? next : candidate
+                                )
+                              );
+                            }}
+                            type="button"
+                            variant="outline"
+                          >
+                            {t(
+                              "ordered_routing.clear_unsupported",
+                              "Remove unsupported connection options"
+                            )}
+                          </Button>
                         ) : null}
                       </div>
-                    </fieldset>
+                    ) : null}
                   </div>
                 </AccordionContent>
               </AccordionItem>

@@ -1,25 +1,4 @@
 declare namespace API {
-  type AdminActionLog = {
-    action: string;
-    client_ip: string;
-    created_at: number;
-    detail: string;
-    id: number;
-    ip_as_organization: string;
-    ip_asn: number;
-    ip_city: string;
-    ip_country: string;
-    ip_country_code: string;
-    ip_region: string;
-    object: string;
-    object_id: number;
-    source: string;
-    telegram_sender_id: number;
-    timestamp: number;
-    user_agent: string;
-    user_id: number;
-  };
-
   type Ads = {
     content: string;
     created_at: number;
@@ -99,10 +78,6 @@ declare namespace API {
     id: number;
     interval: number;
     limit: number;
-    recipient_count: number;
-    /** Recipients lists the first recorded recipients, one per line, and
-says how many more there are; RecipientCount is the whole audience,
-the additional addresses included. */
     recipients: string;
     register_end_time: number;
     register_start_time: number;
@@ -219,14 +194,9 @@ the additional addresses included. */
     quantity?: number;
     status?: number;
     subscribe_id?: number;
-    /** TradeNo is refused when set: the gateway assigns it when the order is
-paid, and Stripe and Cryptomus read it as their own payment identifier. */
     trade_no?: string;
-    type: 1 | 2 | 3 | 4;
+    type: number;
     user_id: number;
-    /** UserSubscribeId is the user subscription a renewal (type 2) or traffic
-reset (type 3) order applies to; required for those types. */
-    user_subscribe_id?: number;
   };
 
   type CreatePaymentMethodRequest = {
@@ -261,6 +231,10 @@ reset (type 3) order applies to; required for those types. */
     name?: string;
     protocols?: Protocol[];
     sort?: number;
+  };
+
+  type CreateServerResponse = {
+    id: number;
   };
 
   type CreateSubscribeApplicationRequest = {
@@ -312,7 +286,7 @@ subscription URL does not carry them, in query-string form such as
     content: string;
     from: string;
     ticket_id: number;
-    type: 1 | 2;
+    type: number;
   };
 
   type CreateUserAuthMethodRequest = {
@@ -423,11 +397,6 @@ subscription URL does not carry them, in query-string form such as
     windows?: string;
   };
 
-  type FilterAdminActionLogResponse = {
-    list: AdminActionLog[];
-    total: number;
-  };
-
   type FilterBalanceLogResponse = {
     list: BalanceLog[];
     total: number;
@@ -503,11 +472,6 @@ subscription URL does not carry them, in query-string form such as
     total: number;
   };
 
-  type FilterUnmatchedPaymentLogResponse = {
-    list: UnmatchedPaymentLog[];
-    total: number;
-  };
-
   type Follow = {
     content: string;
     created_at: number;
@@ -515,6 +479,115 @@ subscription URL does not carry them, in query-string form such as
     id: number;
     ticket_id: number;
     type: number;
+  };
+
+  type GeneratedConfigNodeOutbound = {
+    address: string;
+    allow_insecure?: boolean;
+    alpn?: string[];
+    cipher?: string;
+    congestion_controller?: string;
+    encryption?: string;
+    encryption_client_padding?: string;
+    encryption_mode?: string;
+    encryption_password?: string;
+    encryption_rtt?: string;
+    encryption_ticket?: string;
+    fingerprint?: string;
+    flow?: string;
+    heartbeat?: number;
+    host?: string;
+    id?: string;
+    ip_rules?: string[];
+    multiplex?: string;
+    name: string;
+    password: string;
+    path?: string;
+    plugin?: string;
+    plugin_opts?: any;
+    port: number;
+    protocol: string;
+    protocol_rules?: string[];
+    reality_public_key?: string;
+    reality_short_id?: string;
+    reduce_rtt?: boolean;
+    rules: string[];
+    security?: string;
+    service_name?: string;
+    settings?: string;
+    sni?: string;
+    spider_x?: string;
+    stream_settings?: string;
+    transport?: string;
+    udp_stream?: boolean;
+    uot?: boolean;
+    uot_version?: number;
+    user?: string;
+    uuid?: string;
+    xhttp_extra?: string;
+    xhttp_mode?: string;
+  };
+
+  type GeneratedGetServerNodeConfigResponse = {
+    effective: GeneratedServerNodeConfigValues;
+    global: GeneratedServerNodeConfigValues;
+    override: GeneratedServerNodeConfigOverride;
+    routing_status: GeneratedRoutingStatusView;
+  };
+
+  type GeneratedNodeConfig = {
+    dns: NodeDNS[];
+    ip_strategy: string;
+    node_pull_interval: number;
+    node_push_interval: number;
+    node_secret: string;
+    routing: GeneratedNodeRouting;
+    routing_capabilities: number[];
+    routing_mode: string;
+    routing_revision: number;
+    traffic_report_threshold: number;
+  };
+
+  type GeneratedNodeRouting = {
+    default_outbound_id: string;
+    outbounds: GeneratedConfigNodeOutbound[];
+    rules: NodeRoute[];
+    version: number;
+  };
+
+  type GeneratedRoutingStatusView = {
+    known: boolean;
+    report?: RoutingStatusReport;
+    reporter_verified: boolean;
+  };
+
+  type GeneratedServerNodeConfigOverride = {
+    dns: NodeDNS[];
+    inherit_dns: boolean;
+    inherit_ip_strategy: boolean;
+    inherit_routing: boolean;
+    ip_strategy: string;
+    routing: GeneratedNodeRouting;
+    routing_revision: number;
+  };
+
+  type GeneratedServerNodeConfigValues = {
+    dns: NodeDNS[];
+    ip_strategy: string;
+    routing: NodeRoutingPolicy;
+    routing_mode: string;
+    routing_revision: number;
+  };
+
+  type GeneratedUpdateServerNodeConfigRequest = {
+    dns?: NodeDNS[];
+    inherit_dns?: boolean;
+    inherit_ip_strategy?: boolean;
+    inherit_routing?: boolean;
+    ip_strategy?: string;
+    routing?: GeneratedNodeRouting;
+    routing_revision?: number;
+    server_id: number;
   };
 
   type getAdsDetailParams = {
@@ -616,17 +689,6 @@ subscription URL does not carry them, in query-string form such as
     total: number;
   };
 
-  type getLogAdminListParams = {
-    date?: string;
-    end_date?: string;
-    page: number;
-    search?: string;
-    size: number;
-    start_date?: string;
-    /** UserId narrows the trail to one administrator. */
-    user_id?: number;
-  };
-
   type getLogBalanceListParams = {
     date?: string;
     end_date?: string;
@@ -699,17 +761,6 @@ subscription URL does not carry them, in query-string form such as
     search?: string;
     size: number;
     start_date?: string;
-    user_id?: number;
-  };
-
-  type getLogPaymentUnmatchedListParams = {
-    date?: string;
-    end_date?: string;
-    page: number;
-    search?: string;
-    size: number;
-    start_date?: string;
-    /** UserId narrows the list to one payer. */
     user_id?: number;
   };
 
@@ -845,12 +896,6 @@ subscription URL does not carry them, in query-string form such as
 
   type getServerNodeConfigParams = {
     server_id: number;
-  };
-
-  type GetServerNodeConfigResponse = {
-    effective: ServerNodeConfigValues;
-    global: ServerNodeConfigValues;
-    override: ServerNodeConfigOverride;
   };
 
   type getServerNodeListParams = {
@@ -1119,19 +1164,6 @@ subscription URL does not carry them, in query-string form such as
     updated_at: number;
   };
 
-  type NodeConfig = {
-    block: string[];
-    block_ips?: string[];
-    block_protocols?: string[];
-    dns: NodeDNS[];
-    ip_strategy: string;
-    node_pull_interval: number;
-    node_push_interval: number;
-    node_secret: string;
-    outbound: NodeOutbound[];
-    traffic_report_threshold: number;
-  };
-
   type NodeDNS = {
     address: string;
     domains: string[];
@@ -1155,6 +1187,8 @@ subscription URL does not carry them, in query-string form such as
     flow?: string;
     heartbeat?: number;
     host?: string;
+    id?: string;
+    /** Must be empty in v1. */
     ip_rules?: string[];
     multiplex?: string;
     name: string;
@@ -1164,11 +1198,13 @@ subscription URL does not carry them, in query-string form such as
     plugin_opts?: any;
     port: number;
     protocol: string;
+    /** Must be empty in v1. */
+    protocol_rules?: string[];
     reality_public_key?: string;
     reality_short_id?: string;
     reduce_rtt?: boolean;
+    /** Legacy match arrays are retained for protobuf compatibility and must be empty in v1. */
     rules: string[];
-    protocol_rules?: string[];
     security?: string;
     service_name?: string;
     settings?: string;
@@ -1183,6 +1219,36 @@ subscription URL does not carry them, in query-string form such as
     uuid?: string;
     xhttp_extra?: string;
     xhttp_mode?: string;
+  };
+
+  type NodeRoute = {
+    enabled: boolean;
+    id: string;
+    kind: string;
+    outbound_id: string;
+    remark: string;
+    values: string[];
+  };
+
+  type NodeRoutingPolicy = {
+    default_outbound_id: string;
+    local_transition_revision: number;
+    mode: string;
+    outbounds: NodeOutbound[];
+    rules: NodeRoutingRule[];
+    source: string;
+    source_revision: number;
+    source_server_id: number;
+    version: number;
+  };
+
+  type NodeRoutingRule = {
+    enabled: boolean;
+    id: string;
+    kind: string;
+    outbound_id: string;
+    remark: string;
+    values: string[];
   };
 
   type Order = {
@@ -1205,10 +1271,6 @@ subscription URL does not carry them, in query-string form such as
     type: number;
     updated_at: number;
     user_id: number;
-    /** UserSubscribeId is the user subscription a renewal or traffic reset
-order applies to; zero for other orders and for orders created before
-it was recorded. */
-    user_subscribe_id: number;
   };
 
   type OrderLog = {
@@ -1306,7 +1368,7 @@ it was recorded. */
   };
 
   type PreviewSubscribeTemplateResponse = {
-    /** The rendered template preview */
+    /** 预览的模板内容 */
     template: string;
   };
 
@@ -1315,137 +1377,137 @@ it was recorded. */
   };
 
   type Protocol = {
-    /** Listener compatibility: whether to accept the PROXY protocol; node inbounds do not all enable it yet. */
+    /** 监听器通用兼容字段：是否接收 PROXY protocol；当前节点入站尚未统一启用。 */
     accept_proxy_protocol: boolean;
-    /** TLS client compatibility: allows skipping certificate verification; inbound configurations usually ignore it, and it is not a server certificate setting. */
+    /** TLS 客户端兼容字段：允许跳过证书校验；入站配置通常不消费，不能作为服务端证书配置使用。 */
     allow_insecure: boolean;
-    /** TLS/HTTP/QUIC protocols: the TLS ALPN list; Nowhere takes exactly one value, now/1 by default. */
+    /** TLS/HTTP/QUIC 协议通用字段：TLS ALPN 列表；Nowhere 必须且只能设置一个值，默认 now/1。 */
     alpn: string[];
-    /** TLS protocols: the environment variables (credentials) passed to the DNS provider with cert_mode=dns. */
+    /** TLS 协议通用字段：cert_mode=dns 时传给 DNS 服务商的环境变量/凭据配置。 */
     cert_dns_env: string;
-    /** TLS protocols: the DNS provider used with cert_mode=dns. */
+    /** TLS 协议通用字段：cert_mode=dns 时使用的 DNS 服务商标识。 */
     cert_dns_provider: string;
-    /** TLS protocols: the certificate source, file, self, http or dns; none configures no certificate. */
+    /** TLS 协议通用字段：证书来源模式，支持 file、self、http、dns；none 表示不配置证书。 */
     cert_mode: string;
-    /** Shadowsocks/SSR: the Shadowsocks method or the SSR cipher. */
+    /** Shadowsocks/SSR 共用字段：Shadowsocks method 或 SSR cipher。 */
     cipher: string;
-    /** QUIC protocols: TUIC's congestion control field, and the legacy alias of Naive's. */
+    /** QUIC 协议共用字段：TUIC 的主拥塞控制字段，也是 Naive 的旧字段别名。 */
     congestion_controller: string;
-    /** TLS client compatibility: disables SNI; server inbounds currently ignore it. */
+    /** TLS 客户端兼容字段：禁用 SNI；当前服务端入站不消费。 */
     disable_sni: boolean;
-    /** Hysteria2 only: the server's download bandwidth in Mbps. */
+    /** Hysteria2 专属字段：服务端下行带宽参数，单位为 Mbps。 */
     down_mbps: number;
-    /** Subscription clients: whether Encrypted ClientHello is enabled; left out of the configuration distributed to the nodes. */
+    /** 订阅客户端字段：是否启用 Encrypted ClientHello；节点配置下发时会过滤。 */
     ech_enable: boolean;
-    /** Subscription clients: the outer ECH server name; left out of the configuration distributed to the nodes. */
+    /** 订阅客户端字段：ECH 外层 ServerName；节点配置下发时会过滤。 */
     ech_server_name: string;
-    /** Common: whether the inbound protocol is enabled. */
+    /** 通用字段：是否启用该入站协议。 */
     enable: boolean;
-    /** VLESS Encryption only: the cipher suite, such as none or mlkem768x25519plus. */
+    /** VLESS Encryption 专属字段：加密套件，如 none、mlkem768x25519plus。 */
     encryption: string;
-    /** VLESS Encryption client information: the padding rules of the client direction, for the subscription output. */
+    /** VLESS Encryption 客户端信息字段：客户端方向 padding 规则，用于订阅输出。 */
     encryption_client_padding: string;
-    /** VLESS Encryption only: the key encapsulation mode, such as native, xorpub or random. */
+    /** VLESS Encryption 专属字段：密钥封装模式，如 native、xorpub、random。 */
     encryption_mode: string;
-    /** VLESS Encryption client information: the 1-RTT (derived) authentication password, for the subscription output. */
+    /** VLESS Encryption 客户端信息字段：1-RTT/派生认证密码，用于订阅输出。 */
     encryption_password: string;
-    /** VLESS Encryption, server side only: the ML-KEM/X25519 private key material. */
+    /** VLESS Encryption 服务端专属字段：ML-KEM/X25519 私钥材料。 */
     encryption_private_key: string;
-    /** VLESS Encryption only: the handshake round-trip mode, 0rtt or 1rtt. */
+    /** VLESS Encryption 专属字段：握手往返模式，取值 0rtt 或 1rtt。 */
     encryption_rtt: string;
-    /** VLESS Encryption, server side only: the padding rules of the server direction. */
+    /** VLESS Encryption 服务端专属字段：服务端方向 padding 规则。 */
     encryption_server_padding: string;
-    /** VLESS Encryption, server side only: the 0-RTT ticket. */
+    /** VLESS Encryption 服务端专属字段：0-RTT ticket。 */
     encryption_ticket: string;
-    /** TLS client compatibility: the uTLS fingerprint; node inbounds currently ignore it, it is kept only for outbound and legacy configurations. */
+    /** TLS 客户端兼容字段：uTLS 指纹；当前节点入站不消费，仅为出站/旧配置兼容保留。 */
     fingerprint: string;
-    /** VLESS only: the XTLS Vision flow control; xtls-rprx-vision is currently the only valid value. */
+    /** VLESS 专属字段：XTLS Vision 流控模式，当前有效值为 xtls-rprx-vision。 */
     flow: string;
-    /** TUIC only: the connection heartbeat interval in seconds; 0 uses the node's default. */
+    /** TUIC 专属字段：连接心跳间隔，单位为秒；0 使用节点默认值。 */
     heartbeat: number;
-    /** Hysteria2/TUIC-style QUIC protocols: the port hopping interval; node inbounds do not enable port hopping yet. */
+    /** Hysteria2/TUIC 类 QUIC 协议字段：端口跳跃时间间隔；当前节点入站尚未启用该能力。 */
     hop_interval: number;
-    /** Hysteria2/TUIC-style QUIC protocols: the port hopping range; node inbounds do not enable port hopping yet. */
+    /** Hysteria2/TUIC 类 QUIC 协议字段：端口跳跃范围；当前节点入站尚未启用该能力。 */
     hop_ports: string;
-    /** VLESS/VMess/Trojan transport: the Host of WebSocket, HTTPUpgrade or XHTTP. */
+    /** VLESS/VMess/Trojan 传输字段：WebSocket、HTTPUpgrade 或 XHTTP 的 Host。 */
     host: string;
-    /** Snell only: the Snell v6 mode; other protocols leave it unset. */
+    /** Snell 专属字段：Snell v6 的工作模式；其他协议不应设置。 */
     mode: string;
-    /** Protocol-independent capability: the multiplexing level (off, low, medium or high), for the stream protocols that support mux. */
+    /** 协议无关能力字段：多路复用级别（off、low、medium、high），适用于支持 mux 的流协议。 */
     multiplex: string;
-    /** Listening network: tcp, udp or both; Nowhere normalizes it to mix, tcp or udp, and the other protocols check it against what each supports. */
+    /** 监听网络通用字段：选择 tcp、udp 或 both；Nowhere 规范化为 mix、tcp 或 udp，其他协议按各自能力校验。 */
     network: string;
-    /** Obfuscating protocols: Hysteria2's Salamander, Snell v5's obfs or SSR's obfs method. */
+    /** 混淆协议共用字段：Hysteria2 的 Salamander、Snell v5 的 obfs、SSR 的 obfs 方法。 */
     obfs: string;
-    /** Legacy obfuscation compatibility: the obfuscation Host; node inbounds currently ignore it, and Shadowsocks plugins take plugin_opts instead. */
+    /** 旧混淆实现兼容字段：混淆目标 Host；当前节点入站不消费，Shadowsocks 插件应使用 plugin_opts。 */
     obfs_host: string;
-    /** SSR only: the SSR obfs_param. */
+    /** SSR 专属字段：SSR obfs_param。 */
     obfs_param: string;
-    /** Hysteria2 only: the Salamander obfuscation password, used only with obfs=salamander. */
+    /** Hysteria2 专属字段：Salamander 混淆密码，仅在 obfs=salamander 时使用。 */
     obfs_password: string;
-    /** Legacy obfuscation compatibility: the obfuscation request path; node inbounds currently ignore it, and Shadowsocks plugins take plugin_opts instead. */
+    /** 旧混淆实现兼容字段：混淆请求路径；当前节点入站不消费，Shadowsocks 插件应使用 plugin_opts。 */
     obfs_path: string;
-    /** AnyTLS only: the TLS record padding scheme. */
+    /** AnyTLS 专属字段：TLS record padding 方案。 */
     padding_scheme: string;
-    /** VLESS/VMess/Trojan transport: the request path of WebSocket, HTTPUpgrade or XHTTP. */
+    /** VLESS/VMess/Trojan 传输字段：WebSocket、HTTPUpgrade 或 XHTTP 的请求路径。 */
     path: string;
-    /** Shadowsocks (AEAD/2022) only: the inbound plugin, such as obfs, v2ray-plugin, shadow-tls or restls. */
+    /** Shadowsocks（AEAD/2022）专属字段：入站插件名，如 obfs、v2ray-plugin、shadow-tls、restls。 */
     plugin: string;
-    /** Shadowsocks (AEAD/2022) only: the structured options of the selected inbound plugin. */
+    /** Shadowsocks（AEAD/2022）专属字段：所选入站插件的结构化参数。 */
     plugin_opts: any;
-    /** Common: the inbound listening port. */
+    /** 通用字段：入站监听端口。 */
     port: number;
-    /** SSR only: the SSR protocol method, under the JSON name protocol, which is not the top-level type. */
+    /** SSR 专属字段：SSR protocol 方法；JSON 名称 protocol 与顶层 type 不同。 */
     protocol: string;
-    /** SSR only: the SSR protocol_param. */
+    /** SSR 专属字段：SSR protocol_param。 */
     protocol_param: string;
-    /** QUIC protocols: Naive's congestion control field, and the compatibility alias of TUIC's. */
+    /** QUIC 协议共用字段：Naive 的主拥塞控制字段，也是 TUIC 的兼容别名。 */
     quic_congestion_control: string;
-    /** Panel: the traffic billing ratio, 1 by default; not part of the protocol handshake. */
+    /** 面板通用字段：流量计费倍率，默认值为 1；不参与节点协议握手。 */
     ratio: number;
-    /** VLESS/VMess REALITY, server side only: the server's X25519 private key. */
+    /** VLESS/VMess REALITY 服务端专属字段：服务端 X25519 私钥。 */
     reality_private_key: string;
-    /** VLESS/VMess REALITY client information: the public key of the private key, mainly for the subscription output. */
+    /** VLESS/VMess REALITY 客户端信息字段：由私钥对应的公钥，主要用于订阅输出。 */
     reality_public_key: string;
-    /** VLESS/VMess REALITY only: the address the REALITY handshake is forwarded to. */
+    /** VLESS/VMess REALITY 专属字段：REALITY 握手转发目标地址。 */
     reality_server_addr: string;
-    /** VLESS/VMess REALITY only: the port the REALITY handshake is forwarded to. */
+    /** VLESS/VMess REALITY 专属字段：REALITY 握手转发目标端口。 */
     reality_server_port: number;
-    /** VLESS/VMess REALITY only: the short ID clients may use. */
+    /** VLESS/VMess REALITY 专属字段：允许客户端使用的 short ID。 */
     reality_short_id: string;
-    /** REALITY target connection: 0 sends no PROXY header (default), 1 sends v1, 2 sends v2. Independent of listener reception. */
-    reality_xver?: 0 | 1 | 2;
-    /** TUIC only: enables QUIC 0-RTT to save round trips on the first handshake. */
+    /** REALITY target-side PROXY protocol version: 0 (default), 1 or 2; independent of reception. */
+    reality_xver: number;
+    /** TUIC 专属字段：启用 QUIC 0-RTT，以减少首次握手往返。 */
     reduce_rtt: boolean;
-    /** TLS/REALITY protocols: none, tls or reality; each protocol limits the values it accepts. */
+    /** TLS/REALITY 协议通用字段：选择 none、tls 或 reality；实际可选值由具体协议限制。 */
     security: string;
-    /** Key-based protocols: the Shadowsocks 2022 server key, the SSR password or the Snell PSK. */
+    /** 密钥型协议共用字段：Shadowsocks 2022 服务端密钥、SSR 密码或 Snell PSK。 */
     server_key: string;
-    /** VLESS/VMess/Trojan gRPC transport only: the gRPC service name. */
+    /** VLESS/VMess/Trojan gRPC 传输专属字段：gRPC service name。 */
     service_name: string;
-    /** TLS protocols: the certificate domain and the TLS server name; REALITY also uses it as the server name. */
+    /** TLS 协议通用字段：证书域名及 TLS ServerName；REALITY 也用它作为服务端名称。 */
     sni: string;
-    /** Mieru only: the traffic pattern (packet length distribution) settings. */
+    /** Mieru 专属字段：流量形态/包长分布配置。 */
     traffic_pattern: string;
-    /** VLESS/VMess/Trojan transport: tcp, ws, httpupgrade, grpc or xhttp. */
+    /** VLESS/VMess/Trojan 通用传输字段：tcp、ws、httpupgrade、grpc 或 xhttp。 */
     transport: string;
-    /** Common: the protocol type, such as shadowsocks, vless, vmess, hysteria2, tuic or nowhere. */
+    /** 通用字段：协议类型标识，例如 shadowsocks、vless、vmess、hysteria2、tuic、nowhere。 */
     type: string;
-    /** TUIC/Hysteria compatibility: the UDP relay mode of the former implementation; node inbounds currently ignore it. */
+    /** TUIC/Hysteria 兼容字段：旧实现的 UDP relay 模式；当前节点入站不消费。 */
     udp_relay_mode: string;
-    /** Protocol-independent capability: UDP over TCP, for every protocol that supports UoT rather than one in particular. */
+    /** 协议无关能力字段：UDP over TCP 开关，供支持 UoT 的协议使用，并非某一协议专属。 */
     uot: boolean;
-    /** Protocol-independent capability: the UoT version, currently 1 or 2; 0 means the default version. */
+    /** 协议无关能力字段：UoT 协议版本，当前支持 1 或 2；0 表示使用默认版本。 */
     uot_version: number;
-    /** Hysteria2 only: the server's upload bandwidth in Mbps. */
+    /** Hysteria2 专属字段：服务端上行带宽参数，单位为 Mbps。 */
     up_mbps: number;
-    /** Mieru only: whether clients must send a user hint that identifies the user. */
+    /** Mieru 专属字段：是否强制客户端携带可识别用户的 user hint。 */
     user_hint_is_mandatory: boolean;
-    /** Version: Snell accepts 5 or 6, TUIC 5 and Nowhere 1; 0 means the protocol's default. */
+    /** 版本字段：Snell 接受 5/6，TUIC 接受 5，Nowhere 接受 1；0 表示使用协议默认值。 */
     version: number;
-    /** VLESS/VMess/Trojan XHTTP transport only: the XHTTP extra path and parameters. */
+    /** VLESS/VMess/Trojan XHTTP 传输专属字段：XHTTP 扩展路径/参数。 */
     xhttp_extra: string;
-    /** VLESS/VMess/Trojan XHTTP transport only: the XHTTP mode, such as auto, packet-up or stream-up. */
+    /** VLESS/VMess/Trojan XHTTP 传输专属字段：XHTTP 工作模式，如 auto、packet-up、stream-up。 */
     xhttp_mode: string;
   };
 
@@ -1572,6 +1634,11 @@ it was recorded. */
     user_subscribe_id?: number;
   };
 
+  type ResponseErrorBean = {
+    code: number;
+    msg: string;
+  };
+
   type ResponseSuccessBean = {
     code: number;
     msg: string;
@@ -1589,6 +1656,35 @@ it was recorded. */
     status?: 1 | 2;
   };
 
+  type RoutingCandidateIdentity = {
+    local_transition_revision: number;
+    mode: string;
+    source: string;
+    source_revision: number;
+    source_server_id: number;
+  };
+
+  type RoutingReportError = {
+    identity: RoutingCandidateIdentity;
+    message: string;
+    stage: string;
+  };
+
+  type RoutingStatusReport = {
+    conflict?: boolean;
+    instance_id?: string;
+    /** LivenessAt may be newer when stale or duplicate reports arrive. */
+    liveness_at?: number;
+    /** ReceivedAt is the Redis receive time of the last accepted sequence. */
+    received_at: number;
+    routing_applied?: RoutingCandidateIdentity;
+    routing_error?: RoutingReportError;
+    routing_pending?: RoutingCandidateIdentity;
+    routing_sequence?: number;
+    routing_version: number;
+    updated_at: number;
+  };
+
   type Server = {
     address: string;
     city: string;
@@ -1601,28 +1697,6 @@ it was recorded. */
     sort: number;
     status: ServerStatus;
     updated_at: number;
-  };
-
-  type ServerNodeConfigOverride = {
-    block: string[];
-    block_ips?: string[];
-    block_protocols?: string[];
-    dns: NodeDNS[];
-    inherit_block: boolean;
-    inherit_dns: boolean;
-    inherit_ip_strategy: boolean;
-    inherit_outbound: boolean;
-    ip_strategy: string;
-    outbound: NodeOutbound[];
-  };
-
-  type ServerNodeConfigValues = {
-    block: string[];
-    block_ips?: string[];
-    block_protocols?: string[];
-    dns: NodeDNS[];
-    ip_strategy: string;
-    outbound: NodeOutbound[];
   };
 
   type ServerOnlineIP = {
@@ -1645,6 +1719,7 @@ it was recorded. */
     mem: number;
     online: ServerOnlineUser[];
     protocol: string;
+    routing: GeneratedRoutingStatusView;
     status: string;
   };
 
@@ -1889,28 +1964,6 @@ it was recorded. */
     user_id: number;
   };
 
-  type UnmatchedPaymentLog = {
-    actor_id: number;
-    amount: number;
-    client_ip: string;
-    created_at: number;
-    currency: string;
-    id: number;
-    ip_as_organization: string;
-    ip_asn: number;
-    ip_city: string;
-    ip_country: string;
-    ip_country_code: string;
-    ip_region: string;
-    order_no: string;
-    platform: string;
-    reason: string;
-    timestamp: number;
-    trade_no: string;
-    user_agent: string;
-    user_id: number;
-  };
-
   type UpdateAdsRequest = {
     content?: string;
     description?: string;
@@ -1995,20 +2048,6 @@ it was recorded. */
     sort?: number;
   };
 
-  type UpdateServerNodeConfigRequest = {
-    block?: string[];
-    block_ips?: string[];
-    block_protocols?: string[];
-    dns?: NodeDNS[];
-    inherit_block?: boolean;
-    inherit_dns?: boolean;
-    inherit_ip_strategy?: boolean;
-    inherit_outbound?: boolean;
-    ip_strategy?: string;
-    outbound?: NodeOutbound[];
-    server_id: number;
-  };
-
   type UpdateServerRequest = {
     address?: string;
     city?: string;
@@ -2078,10 +2117,6 @@ it was recorded. */
 
   type UpdateUserBasiceInfoRequest = {
     avatar?: string;
-    /** Balance, Commission and GiftAmount are wallet amounts to set; one
-left out of the request leaves that amount as it is, so a client
-sending only what the administrator edited cannot revert the money
-movements made since the form was loaded. */
     balance?: number;
     commission?: number;
     enable?: boolean;
@@ -2188,7 +2223,6 @@ movements made since the form was loaded. */
   type UserSubscribe = {
     created_at: number;
     download: number;
-    entitlement_source: string;
     expire_time: number;
     finished_at: number;
     id: number;
@@ -2209,7 +2243,6 @@ movements made since the form was loaded. */
   type UserSubscribeDetail = {
     created_at: number;
     download: number;
-    entitlement_source: string;
     expire_time: number;
     id: number;
     order_id: number;

@@ -7,7 +7,6 @@ import {
   normalizeRuleLines,
   protocolRuleListSchema,
   serializedJSONByteLength,
-  supportsStructuredRouteRules,
   validateDomainRule,
   validateIPRule,
   validateProtocolRule,
@@ -60,6 +59,10 @@ describe("structured route-rule parser", () => {
     ["full:example_domain", "invalidDomain"],
     [String.raw`regex:tracker(?=\.example)`, "regexLookaround"],
     [String.raw`regexp:(tracker)\1`, "regexBackreference"],
+    ["regexp:(", "invalidRegex"],
+    ["regexp:[", "invalidRegex"],
+    ["regexp:*bad", "invalidRegex"],
+    ["regexp:foo\\", "invalidRegex"],
     ["geosite:", "emptyGeosite"],
     ["geosite:cn@", "emptyGeosite"],
     ["mystery:example.com", "unknownPrefix"],
@@ -163,15 +166,6 @@ describe("structured route-rule parser", () => {
     expect(
       validateRouteRules("domain", [`regex:${"x".repeat(4090)}`])[0]?.code
     ).toBe("ruleTooLong");
-    expect(
-      validateRouteRules(
-        "domain",
-        Array.from(
-          { length: 16 },
-          (_, index) => `regex:${"x".repeat(3990)}${index}`
-        )
-      ).some((issue) => issue.code === "serializedTooLarge")
-    ).toBe(true);
   });
 
   it("measures persisted JSON using Go encoding/json escaping", () => {
@@ -182,18 +176,5 @@ describe("structured route-rule parser", () => {
     expect(
       normalizeRuleLines(" example.com \n\n geoip:private\nexample.com\n")
     ).toEqual(["example.com", "geoip:private"]);
-  });
-
-  it("gates structured fields using reliable response-shape presence", () => {
-    expect(
-      supportsStructuredRouteRules({ block_ips: [], block_protocols: [] })
-    ).toBe(true);
-    expect(supportsStructuredRouteRules({ block: [] })).toBe(false);
-    expect(
-      supportsStructuredRouteRules({
-        block_ips: [],
-        block_protocols: undefined,
-      })
-    ).toBe(true);
   });
 });

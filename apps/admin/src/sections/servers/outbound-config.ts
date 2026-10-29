@@ -1,25 +1,6 @@
 import { z } from "zod";
-import {
-  ENCRYPTION_MODES,
-  ENCRYPTION_RTT,
-  ENCRYPTION_TYPES,
-  FINGERPRINTS,
-  getLabel,
-  multiplexLevels,
-  SS_CIPHERS,
-  TUIC_CONGESTION,
-  XHTTP_MODES,
-} from "./form-schema";
-import {
-  canonicalizeRouteRules,
-  domainRuleListSchema,
-  ipRuleListSchema,
-  MAX_PERSISTED_JSON_BYTES,
-  normalizeRuleLines,
-  protocolRuleListSchema,
-  serializedJSONByteLength,
-  utf8ByteLength,
-} from "./route-rules";
+import { FINGERPRINTS, getLabel, XHTTP_MODES } from "./form-schema";
+import { supportedShadowsocksCiphers } from "./outbound-capability";
 
 export const OUTBOUND_PROTOCOLS = [
   { label: "HTTP", value: "http" },
@@ -29,7 +10,6 @@ export const OUTBOUND_PROTOCOLS = [
   { label: "VLESS", value: "vless" },
   { label: "Trojan", value: "trojan" },
   { label: "Hysteria2", value: "hysteria2" },
-  { label: "TUIC", value: "tuic" },
   { label: "AnyTLS", value: "anytls" },
   { label: "Direct", value: "direct" },
   { label: "Reject", value: "reject" },
@@ -37,17 +17,19 @@ export const OUTBOUND_PROTOCOLS = [
 
 const OUTBOUND_TRANSPORTS = ["tcp", "ws", "grpc", "httpupgrade", "xhttp"];
 const OUTBOUND_SECURITY = {
-  vmess: ["none", "tls"],
-  vless: ["none", "tls"],
+  http: ["none", "tls", "reality"],
+  socks: ["none", "tls", "reality"],
+  shadowsocks: ["none", "tls", "reality"],
+  vmess: ["none", "tls", "reality"],
+  vless: ["none", "tls", "reality"],
   trojan: ["none", "tls", "reality"],
   hysteria2: ["tls"],
-  tuic: ["tls"],
   anytls: ["tls", "reality"],
 } as const;
 
 const text = z.string().optional();
 
-export const outboundConfigSchema = z
+export const outboundConnectionSchema = z
   .object({
     name: z.string(),
     protocol: z.string(),
@@ -84,41 +66,24 @@ export const outboundConfigSchema = z
     reduce_rtt: z.boolean().optional(),
     heartbeat: z.number().optional(),
     settings: text,
-    rules: domainRuleListSchema,
-    ip_rules: ipRuleListSchema,
-    protocol_rules: protocolRuleListSchema,
+    stream_settings: text,
+    spider_x: text,
+    rules: z.array(z.string()).optional(),
+    ip_rules: z.array(z.string()).optional(),
+    protocol_rules: z.array(z.string()).optional(),
   })
   .loose();
 
-export type OutboundConfigFormData = z.infer<typeof outboundConfigSchema>;
-export const MAX_NODE_OUTBOUNDS = 128;
-export const MAX_OUTBOUND_AGGREGATE_RULES = 4096;
-export const MAX_OUTBOUND_AGGREGATE_RULE_BYTES = 48 * 1024;
-
-const REQUIRED_PERSISTED_OUTBOUND_FIELDS = new Set([
-  "name",
-  "protocol",
-  "address",
-  "port",
-  "password",
-  "rules",
-  "ip_rules",
-  "protocol_rules",
-]);
+// Missing fields, explicit false/[], and hidden connection fields survive.
+export type OutboundConnection = z.infer<typeof outboundConnectionSchema>;
 
 export type OutboundNameIssue = {
   code: "duplicate" | "empty";
   index: number;
   name: string;
 };
-export type OutboundCollectionIssueCode =
-  | "outboundAggregateBytes"
-  | "outboundAggregateRules"
-  | "outboundSerializedTooLarge"
-  | "tooManyOutbounds";
-
 export function validateOutboundNames(
-  values: Pick<OutboundConfigFormData, "name">[]
+  values: Pick<OutboundConnection, "name">[]
 ): OutboundNameIssue[] {
   const firstIndexByName = new Map<string, number>();
   const issues: OutboundNameIssue[] = [];
@@ -141,85 +106,15 @@ export function validateOutboundNames(
   return issues;
 }
 
-function outboundPersistenceProjection(item: OutboundConfigFormData) {
-  return Object.fromEntries(
-    Object.entries(item).filter(([field, value]) => {
-      if (REQUIRED_PERSISTED_OUTBOUND_FIELDS.has(field)) return true;
-      if (value === "" || value === false || value === 0 || value == null) {
-        return false;
-      }
-      return !(Array.isArray(value) && value.length === 0);
-    })
-  );
-}
-
-function canonicalOutboundRoutes(item: OutboundConfigFormData) {
-  return {
-    ...item,
-    name: item.name.trim(),
-    rules: canonicalizeRouteRules("domain", item.rules),
-    ip_rules: canonicalizeRouteRules("ip", item.ip_rules),
-    protocol_rules: canonicalizeRouteRules("protocol", item.protocol_rules),
-  };
-}
-
-export function validateOutboundCollection(
-  values: OutboundConfigFormData[]
-): OutboundCollectionIssueCode[] {
-  const issues: OutboundCollectionIssueCode[] = [];
-  const canonicalValues = values.map(canonicalOutboundRoutes);
-  const rules = canonicalValues.flatMap((item) => [
-    ...item.rules,
-    ...item.ip_rules,
-    ...item.protocol_rules,
-  ]);
-  if (values.length > MAX_NODE_OUTBOUNDS) issues.push("tooManyOutbounds");
-  if (rules.length > MAX_OUTBOUND_AGGREGATE_RULES) {
-    issues.push("outboundAggregateRules");
-  }
-  if (
-    rules.reduce((total, rule) => total + utf8ByteLength(rule), 0) >
-    MAX_OUTBOUND_AGGREGATE_RULE_BYTES
-  ) {
-    issues.push("outboundAggregateBytes");
-  }
-  if (
-    serializedJSONByteLength(
-      canonicalValues.map(outboundPersistenceProjection)
-    ) >= MAX_PERSISTED_JSON_BYTES
-  ) {
-    issues.push("outboundSerializedTooLarge");
-  }
-  return issues;
-}
-
-export const outboundConfigListSchema = z
-  .array(outboundConfigSchema)
-  .superRefine((values, context) => {
-    for (const issue of validateOutboundNames(values)) {
-      context.addIssue({
-        code: "custom",
-        message:
-          issue.code === "empty"
-            ? "outboundNameEmpty"
-            : "outboundNameDuplicate",
-        path: [issue.index, "name"],
-      });
-    }
-    for (const code of validateOutboundCollection(values)) {
-      context.addIssue({ code: "custom", message: code, path: [] });
-    }
-  });
 export type OutboundFieldGroup =
   | "basic"
   | "auth"
   | "transport"
   | "security"
   | "reality"
-  | "protocol"
-  | "routing";
+  | "protocol";
 export type OutboundFieldConfig = {
-  name: keyof OutboundConfigFormData;
+  name: keyof OutboundConnection;
   type: "text" | "number" | "select" | "boolean" | "textarea" | "string-list";
   label: string;
   placeholder?: string;
@@ -234,169 +129,6 @@ export type OutboundFieldConfig = {
   className?: string;
 };
 
-const UOT_PROTOCOLS = ["shadowsocks", "vmess", "vless", "trojan", "anytls"];
-const MUX_PROTOCOLS = ["vmess", "vless", "trojan"];
-
-function numberOrZero(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function numberOrUndefined(value: unknown) {
-  if (value === undefined || value === null || value === "") return;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : undefined;
-}
-
-function stringOrDefault(value: unknown, fallback = "") {
-  return typeof value === "string" && value.trim() !== "" ? value : fallback;
-}
-
-function defaultSecurityForProtocol(protocol: string) {
-  if (["trojan", "hysteria2", "tuic", "anytls"].includes(protocol)) {
-    return "tls";
-  }
-  if (["vmess", "vless"].includes(protocol)) return "none";
-  return "";
-}
-
-function defaultTransportForProtocol(protocol: string) {
-  if (["vmess", "vless", "trojan", "anytls"].includes(protocol)) {
-    return "tcp";
-  }
-  if (protocol === "tuic") return "tuic";
-  return "";
-}
-
-function defaultCipherForProtocol(protocol: string) {
-  if (protocol === "shadowsocks") return "chacha20-ietf-poly1305";
-  if (protocol === "vmess") return "auto";
-  return "";
-}
-
-export function normalizeOutboundConfig(
-  item: Record<string, any>
-): OutboundConfigFormData {
-  const rawProtocol = stringOrDefault(item.protocol, "http");
-  const protocol = rawProtocol === "hysteria" ? "hysteria2" : rawProtocol;
-  let security = stringOrDefault(
-    item.security,
-    defaultSecurityForProtocol(protocol)
-  );
-  if (["hysteria2", "tuic"].includes(protocol)) security = "tls";
-  if (protocol === "anytls" && !["tls", "reality"].includes(security)) {
-    security = "tls";
-  }
-  const reality = security === "reality";
-  const rawTransport = stringOrDefault(
-    item.transport,
-    defaultTransportForProtocol(protocol)
-  );
-  const transport =
-    reality || protocol === "anytls"
-      ? "tcp"
-      : rawTransport === "websocket"
-        ? "ws"
-        : rawTransport;
-  const uot = UOT_PROTOCOLS.includes(protocol) && Boolean(item.uot);
-  const multiplex = MUX_PROTOCOLS.includes(protocol)
-    ? stringOrDefault(item.multiplex, "none")
-    : "none";
-
-  return {
-    ...item,
-    name: typeof item.name === "string" ? item.name.trim() : "",
-    protocol,
-    address: item.address || "",
-    port: numberOrZero(item.port),
-    user: item.user || "",
-    password: item.password || "",
-    uuid: item.uuid || "",
-    cipher: stringOrDefault(item.cipher, defaultCipherForProtocol(protocol)),
-    security,
-    sni: item.sni || "",
-    alpn: Array.isArray(item.alpn) ? item.alpn : [],
-    allow_insecure: security === "tls" && Boolean(item.allow_insecure),
-    fingerprint: reality ? stringOrDefault(item.fingerprint, "chrome") : "",
-    reality_public_key: reality ? item.reality_public_key || "" : "",
-    reality_short_id: reality ? item.reality_short_id || "" : "",
-    transport,
-    host: item.host || "",
-    path: item.path || "",
-    service_name: item.service_name || "",
-    xhttp_mode: item.xhttp_mode || "auto",
-    xhttp_extra: item.xhttp_extra || "",
-    flow:
-      protocol === "vless" && transport === "tcp" && security === "tls"
-        ? stringOrDefault(item.flow, "none")
-        : "none",
-    encryption:
-      protocol === "vless" ? stringOrDefault(item.encryption, "none") : "",
-    encryption_mode: protocol === "vless" ? item.encryption_mode || "" : "",
-    encryption_rtt: protocol === "vless" ? item.encryption_rtt || "" : "",
-    encryption_client_padding:
-      protocol === "vless" ? item.encryption_client_padding || "" : "",
-    encryption_password:
-      protocol === "vless" ? item.encryption_password || "" : "",
-    multiplex,
-    uot,
-    uot_version: uot ? numberOrUndefined(item.uot_version) || 2 : undefined,
-    congestion_controller:
-      protocol === "tuic"
-        ? stringOrDefault(item.congestion_controller, "bbr")
-        : "",
-    udp_stream: protocol === "tuic" && Boolean(item.udp_stream),
-    reduce_rtt: protocol === "tuic" && Boolean(item.reduce_rtt),
-    heartbeat:
-      protocol === "tuic" ? numberOrUndefined(item.heartbeat) : undefined,
-    settings: typeof item.settings === "string" ? item.settings : "",
-    rules: normalizeRuleLines(item.rules),
-    ip_rules: normalizeRuleLines(item.ip_rules),
-    protocol_rules: normalizeRuleLines(item.protocol_rules),
-  };
-}
-
-export function outboundConfigForPayload(
-  item: Record<string, any>,
-  structuredRulesSupported: boolean
-) {
-  const payload: Record<string, unknown> = canonicalOutboundRoutes(
-    normalizeOutboundConfig(item)
-  );
-  if (!structuredRulesSupported) {
-    Reflect.deleteProperty(payload, "ip_rules");
-    Reflect.deleteProperty(payload, "protocol_rules");
-  }
-  return payload;
-}
-
-export function createOutboundConfig(
-  protocol = "http"
-): OutboundConfigFormData {
-  return normalizeOutboundConfig({
-    name: "",
-    protocol,
-    address: "",
-    port: 0,
-    password: "",
-    rules: [],
-    ip_rules: [],
-    protocol_rules: [],
-  });
-}
-
-export function outboundValueForInput(item: OutboundConfigFormData) {
-  return {
-    ...item,
-    alpn: Array.isArray(item.alpn) ? item.alpn.join("\n") : "",
-    rules: Array.isArray(item.rules) ? item.rules.join("\n") : "",
-    ip_rules: Array.isArray(item.ip_rules) ? item.ip_rules.join("\n") : "",
-    protocol_rules: Array.isArray(item.protocol_rules)
-      ? item.protocol_rules.join("\n")
-      : "",
-  };
-}
-
 export function getOutboundSecurityOptions(protocol: string) {
   const values =
     OUTBOUND_SECURITY[protocol as keyof typeof OUTBOUND_SECURITY] || [];
@@ -410,11 +142,13 @@ export function getOutboundProtocolLabel(protocol: string) {
   );
 }
 
-function selected(value: string, t: any) {
+type Translate = (key: string, fallback: string) => string;
+
+function selected(value: string, t: Translate) {
   return { label: t(value, getLabel(value)), value };
 }
 
-export function getOutboundFields(t: any): OutboundFieldConfig[] {
+export function getOutboundFields(t: Translate): OutboundFieldConfig[] {
   const protocolIs =
     (...protocols: string[]) =>
     (item: Record<string, unknown>) =>
@@ -423,9 +157,6 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
     (...values: string[]) =>
     (item: Record<string, unknown>) =>
       values.includes(String(item.security || ""));
-  const encryptionEnabled = (item: Record<string, unknown>) =>
-    item.protocol === "vless" && item.encryption === "mlkem768x25519plus";
-
   return [
     {
       name: "name",
@@ -489,7 +220,6 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
         "shadowsocks",
         "trojan",
         "anytls",
-        "tuic",
         "hysteria2"
       ),
     },
@@ -498,7 +228,7 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       type: "text",
       label: "UUID",
       group: "auth",
-      visible: protocolIs("vmess", "vless", "tuic"),
+      visible: protocolIs("vmess", "vless"),
     },
     {
       name: "cipher",
@@ -506,11 +236,10 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       label: t("cipher", "Cipher"),
       group: "auth",
       options: [
-        ...SS_CIPHERS.map((cipher) => ({ label: cipher, value: cipher })),
-        {
-          label: "2022-blake3-chacha20-poly1305",
-          value: "2022-blake3-chacha20-poly1305",
-        },
+        ...supportedShadowsocksCiphers.map((cipher) => ({
+          label: cipher,
+          value: cipher,
+        })),
         { label: "auto", value: "auto" },
       ],
       visible: protocolIs("shadowsocks", "vmess"),
@@ -522,7 +251,7 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       group: "security",
       options: [],
       visible: (item) =>
-        getOutboundSecurityOptions(String(item.protocol || "")).length > 1,
+        getOutboundSecurityOptions(String(item.protocol || "")).length > 0,
     },
     {
       name: "sni",
@@ -542,9 +271,9 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       name: "fingerprint",
       type: "select",
       label: t("security_fingerprint", "Fingerprint"),
-      group: "reality",
+      group: "security",
       options: FINGERPRINTS.map((value) => selected(value, t)),
-      visible: securityIs("reality"),
+      visible: securityIs("tls", "reality"),
     },
     {
       name: "reality_public_key",
@@ -559,7 +288,13 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       type: "text",
       label: t("security_short_id", "Reality Short ID"),
       group: "reality",
-      required: true,
+      visible: securityIs("reality"),
+    },
+    {
+      name: "spider_x",
+      type: "text",
+      label: t("ordered_routing.spider_x", "REALITY spider path"),
+      group: "reality",
       visible: securityIs("reality"),
     },
     {
@@ -569,8 +304,15 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       group: "transport",
       options: OUTBOUND_TRANSPORTS.map((value) => selected(value, t)),
       visible: (item) =>
-        ["vmess", "vless", "trojan"].includes(String(item.protocol || "")) &&
-        item.security !== "reality",
+        [
+          "http",
+          "socks",
+          "shadowsocks",
+          "vmess",
+          "vless",
+          "trojan",
+          "anytls",
+        ].includes(String(item.protocol || "")),
     },
     {
       name: "host",
@@ -578,9 +320,14 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       label: t("host", "Host"),
       group: "transport",
       visible: (item) =>
-        ["ws", "httpupgrade", "xhttp", "grpc"].includes(
-          String(item.transport || "")
-        ),
+        [
+          "ws",
+          "websocket",
+          "httpupgrade",
+          "xhttp",
+          "splithttp",
+          "grpc",
+        ].includes(String(item.transport || "")),
     },
     {
       name: "path",
@@ -588,7 +335,9 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       label: t("path", "Path"),
       group: "transport",
       visible: (item) =>
-        ["ws", "httpupgrade", "xhttp"].includes(String(item.transport || "")),
+        ["ws", "websocket", "httpupgrade", "xhttp", "splithttp"].includes(
+          String(item.transport || "")
+        ),
     },
     {
       name: "service_name",
@@ -603,7 +352,8 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       label: t("xhttp_mode", "XHTTP Mode"),
       group: "transport",
       options: XHTTP_MODES.map((value) => selected(value, t)),
-      visible: (item) => item.transport === "xhttp",
+      visible: (item) =>
+        ["xhttp", "splithttp"].includes(String(item.transport || "")),
     },
     {
       name: "xhttp_extra",
@@ -612,7 +362,8 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       group: "transport",
       className: "col-span-2",
       placeholder: "{}",
-      visible: (item) => item.transport === "xhttp",
+      visible: (item) =>
+        ["xhttp", "splithttp"].includes(String(item.transport || "")),
     },
     {
       name: "alpn",
@@ -621,124 +372,44 @@ export function getOutboundFields(t: any): OutboundFieldConfig[] {
       group: "security",
       className: "col-span-2",
       placeholder: "h2\nhttp/1.1",
-      visible: (item) =>
-        ["anytls", "tuic"].includes(String(item.protocol || "")) ||
-        (item.security === "tls" && item.transport === "xhttp"),
+      visible: securityIs("tls"),
     },
     {
       name: "flow",
       type: "select",
       label: t("flow", "Flow"),
       group: "auth",
-      options: [selected("none", t), selected("xtls-rprx-vision", t)],
+      options: [
+        selected("none", t),
+        selected("xtls-rprx-vision", t),
+        selected("xtls-rprx-vision-udp443", t),
+      ],
       visible: (item) =>
         item.protocol === "vless" &&
-        item.transport === "tcp" &&
-        item.security === "tls",
-    },
-    {
-      name: "multiplex",
-      type: "select",
-      label: t("multiplex", "Multiplex"),
-      group: "protocol",
-      options: multiplexLevels.map((value) => selected(value, t)),
-      visible: (item) => MUX_PROTOCOLS.includes(String(item.protocol || "")),
-    },
-    {
-      name: "uot",
-      type: "boolean",
-      label: t("uot", "UDP over TCP"),
-      group: "protocol",
-      visible: (item) => UOT_PROTOCOLS.includes(String(item.protocol || "")),
-    },
-    {
-      name: "uot_version",
-      type: "number",
-      label: t("uot_version", "UoT Version"),
-      group: "protocol",
-      min: 1,
-      max: 2,
-      visible: (item) =>
-        UOT_PROTOCOLS.includes(String(item.protocol || "")) &&
-        item.uot === true,
-    },
-    {
-      name: "encryption",
-      type: "select",
-      label: t("encryption", "Encryption"),
-      group: "protocol",
-      options: ENCRYPTION_TYPES.map((value) => selected(value, t)),
-      visible: protocolIs("vless"),
-    },
-    {
-      name: "encryption_mode",
-      type: "select",
-      label: t("encryption_mode", "Encryption Mode"),
-      group: "protocol",
-      options: ENCRYPTION_MODES.map((value) => selected(value, t)),
-      visible: encryptionEnabled,
-    },
-    {
-      name: "encryption_rtt",
-      type: "select",
-      label: t("encryption_rtt", "Encryption RTT"),
-      group: "protocol",
-      options: ENCRYPTION_RTT.map((value) => selected(value, t)),
-      visible: encryptionEnabled,
-    },
-    {
-      name: "encryption_client_padding",
-      type: "text",
-      label: t("encryption_client_padding", "Client Padding"),
-      group: "protocol",
-      visible: encryptionEnabled,
-    },
-    {
-      name: "encryption_password",
-      type: "text",
-      label: t("encryption_password", "Encryption Password"),
-      group: "protocol",
-      visible: encryptionEnabled,
-    },
-    {
-      name: "congestion_controller",
-      type: "select",
-      label: t("congestion_controller", "Congestion Controller"),
-      group: "protocol",
-      options: TUIC_CONGESTION.map((value) => selected(value, t)),
-      visible: protocolIs("tuic"),
-    },
-    {
-      name: "udp_stream",
-      type: "boolean",
-      label: t("udp_stream", "UDP Stream"),
-      group: "protocol",
-      visible: protocolIs("tuic"),
-    },
-    {
-      name: "reduce_rtt",
-      type: "boolean",
-      label: t("reduce_rtt", "Reduce RTT"),
-      group: "protocol",
-      visible: protocolIs("tuic"),
-    },
-    {
-      name: "heartbeat",
-      type: "number",
-      label: t("heartbeat", "Heartbeat"),
-      group: "protocol",
-      min: 0,
-      suffix: "S",
-      visible: protocolIs("tuic"),
+        ["", "tcp", "raw"].includes(String(item.transport || "")) &&
+        ["tls", "reality"].includes(String(item.security || "")),
     },
     {
       name: "settings",
       type: "textarea",
-      label: t("settings", "Hysteria2 Settings"),
+      label: t("server_config.fields.outbound_settings", "Raw settings JSON"),
       group: "protocol",
       className: "col-span-2",
-      placeholder: '{"up_mbps":100,"down_mbps":100}',
-      visible: protocolIs("hysteria2"),
+      placeholder: t(
+        "ordered_routing.raw_settings_placeholder",
+        "Leave empty to use form fields"
+      ),
+    },
+    {
+      name: "stream_settings",
+      type: "textarea",
+      label: t(
+        "server_config.fields.outbound_stream_settings",
+        "Raw stream settings JSON"
+      ),
+      group: "protocol",
+      className: "col-span-2",
+      placeholder: "{}",
     },
   ];
 }

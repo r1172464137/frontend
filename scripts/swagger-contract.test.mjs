@@ -62,26 +62,52 @@ test("Swagger assets satisfy the frontend documentation contract", async () => {
   );
 });
 
-test("admin Swagger exposes the structured route-rule contract", async () => {
+test("admin Swagger exposes cutover-only routing and actual conflict responses", async () => {
   const spec = JSON.parse(
     await readFile(path.join(swaggerDir, "admin.json"), "utf8")
   );
-  const expected = {
-    "dto.NodeConfig": ["block_ips", "block_protocols"],
-    "dto.NodeOutbound": ["ip_rules", "protocol_rules"],
-    "dto.ServerNodeConfigOverride": ["block_ips", "block_protocols"],
-    "dto.ServerNodeConfigValues": ["block_ips", "block_protocols"],
-    "dto.UpdateServerNodeConfigRequest": ["block_ips", "block_protocols"],
-  };
-
-  for (const [definition, fields] of Object.entries(expected)) {
+  for (const definition of [
+    "dto.NodeConfig",
+    "dto.ServerNodeConfigOverride",
+    "dto.ServerNodeConfigValues",
+    "dto.UpdateServerNodeConfigRequest",
+  ]) {
     const properties = spec.definitions?.[definition]?.properties;
     assert.ok(properties, `admin Swagger definition ${definition} must exist`);
-    for (const field of fields) {
-      assert.ok(
-        properties[field],
-        `admin Swagger definition ${definition} must expose ${field}`
+    for (const field of ["routing", "routing_revision"])
+      assert.ok(properties[field], `${definition}.${field} must exist`);
+    for (const field of [
+      "block",
+      "block_ips",
+      "block_protocols",
+      "outbound",
+      "inherit_block",
+      "inherit_outbound",
+    ])
+      assert.equal(
+        field in properties,
+        false,
+        `${definition}.${field} must not exist`
       );
-    }
   }
+  assert.ok(
+    spec.definitions["dto.RoutingStatusReport"].properties.routing_sequence
+  );
+  assert.ok(spec.definitions["dto.RoutingStatusReport"].properties.liveness_at);
+  assert.ok(spec.paths["/v1/admin/server/create"].post.responses["422"]);
+  assert.ok(spec.paths["/v1/admin/server/update"].post.responses["422"]);
+  assert.ok(spec.paths["/v1/admin/system/node_config"].put.responses["409"]);
+  const serverUpdate = spec.paths["/v1/admin/server/node_config/update"].post;
+  assert.ok(serverUpdate.responses["409"]);
+  assert.match(
+    serverUpdate.description,
+    /new or offline servers without requiring a routing status report/i
+  );
+  assert.match(serverUpdate.description, /success does not mean applied/i);
+  assert.match(
+    spec.paths["/v1/admin/server/node_config"].get.description,
+    /unknown or pending does not prevent configuration saves/i
+  );
+  assert.equal(spec.paths["/v1/admin/system/node_config/preview"], undefined);
+  assert.equal(spec.paths["/v1/admin/server/node_config/preview"], undefined);
 });

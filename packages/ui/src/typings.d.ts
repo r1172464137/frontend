@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference path="./node-routing-contract.d.ts" />
 
 import type i18n from "i18next";
 
@@ -14,5 +15,6 @@ declare global {
 declare module "axios" {
   export interface AxiosRequestConfig<D = any> {
     requestType?: string;
+    skipErrorHandler?: boolean;
   }
 }

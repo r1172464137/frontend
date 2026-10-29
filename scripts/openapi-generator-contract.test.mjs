@@ -6,75 +6,82 @@ import {
   responseRequiredOverrides,
 } from "../packages/ui/openapi2ts.config.ts";
 
-const repoRoot = new URL("../", import.meta.url);
-
-const additiveResponseFields = {
-  NodeConfig: ["block_ips", "block_protocols"],
-  NodeOutbound: ["ip_rules", "protocol_rules"],
-  ServerNodeConfigOverride: ["block_ips", "block_protocols"],
-  ServerNodeConfigValues: ["block_ips", "block_protocols"],
-};
-
+const root = new URL("../", import.meta.url);
+const types = [
+  "NodeConfig",
+  "NodeOutbound",
+  "ServerNodeConfigOverride",
+  "ServerNodeConfigValues",
+  "RoutingStatusView",
+];
 function typeBody(source, typeName) {
   const match = source.match(
-    new RegExp(`type ${typeName} = \\{([\\s\\S]*?)\\n  \\};`)
+    new RegExp(`type ${typeName} = \\{([\\s\\S]*?)\\};`)
   );
   if (!match) throw new Error(`generated typings must contain ${typeName}`);
   return match[1];
 }
-
-test("OpenAPI generation keeps additive route response fields optional", async () => {
+test("OpenAPI generator uses cutover-only required fields and nullable inheritance", async () => {
   const swagger = JSON.parse(
-    await readFile(new URL("docs/public/swagger/admin.json", repoRoot), "utf8")
+    await readFile(new URL("docs/public/swagger/admin.json", root), "utf8")
   );
   const schemas = {};
-  for (const typeName of Object.keys(additiveResponseFields)) {
-    const definition = swagger.definitions?.[`dto.${typeName}`];
-    assert.ok(definition, `admin Swagger must contain dto.${typeName}`);
-    schemas[`dto.${typeName}`] = structuredClone(definition);
-  }
-
-  const transformed = requireResponseProperties({
-    components: { schemas },
-  });
-  for (const [typeName, optionalFields] of Object.entries(
-    additiveResponseFields
-  )) {
-    const required =
-      transformed.components.schemas[`dto.${typeName}`].required ?? [];
-    assert.deepEqual(
-      required,
-      responseRequiredOverrides[typeName],
-      `${typeName} must use its mixed-version required-property override`
+  for (const name of types) {
+    assert.ok(swagger.definitions?.[`dto.${name}`]);
+    schemas[`dto.${name}`] = structuredClone(
+      swagger.definitions[`dto.${name}`]
     );
-    for (const field of optionalFields) {
-      assert.equal(
-        required.includes(field),
-        false,
-        `${typeName}.${field} must stay optional for shape capability detection`
-      );
-    }
+  }
+  const transformed = requireResponseProperties({ components: { schemas } });
+  for (const name of types)
+    assert.deepEqual(
+      transformed.components.schemas[`dto.${name}`].required,
+      responseRequiredOverrides[name]
+    );
+  assert.equal(
+    transformed.components.schemas["dto.ServerNodeConfigOverride"].properties
+      .routing.nullable,
+    true
+  );
+  for (const name of [
+    "NodeConfig",
+    "ServerNodeConfigOverride",
+    "ServerNodeConfigValues",
+  ]) {
+    const props = schemas[`dto.${name}`].properties;
+    for (const field of [
+      "block",
+      "block_ips",
+      "block_protocols",
+      "outbound",
+      "inherit_block",
+      "inherit_outbound",
+    ])
+      assert.equal(field in props, false, `${name}.${field} is retired`);
   }
 });
-
-test("checked-in admin typings retain the generator's optional route fields", async () => {
-  const typings = await readFile(
-    new URL("packages/ui/src/services/admin/typings.d.ts", repoRoot),
+test("checked-in management typings carry routing and contain no retired write fields", async () => {
+  const source = await readFile(
+    new URL("packages/ui/src/node-routing-contract.d.ts", root),
     "utf8"
   );
-  for (const [typeName, fields] of Object.entries(additiveResponseFields)) {
-    const body = typeBody(typings, typeName);
-    for (const field of fields) {
-      assert.match(
-        body,
-        new RegExp(`\\n    ${field}\\?: string\\[\\];`),
-        `${typeName}.${field} must be optional in generated typings`
-      );
-    }
-  }
-
-  const request = typeBody(typings, "UpdateServerNodeConfigRequest");
-  for (const field of ["block_ips", "block_protocols"]) {
-    assert.match(request, new RegExp(`\\n    ${field}\\?: string\\[\\];`));
-  }
+  assert.match(typeBody(source, "NodeConfig"), /routing: NodeRouting;/);
+  assert.match(
+    typeBody(source, "ServerNodeConfigOverride"),
+    /routing: NodeRouting \| null;/
+  );
+  assert.match(
+    typeBody(source, "ServerNodeConfigOverride"),
+    /inherit_routing: boolean;/
+  );
+  const body = typeBody(source, "UpdateServerNodeConfigRequest");
+  assert.match(body, /routing_revision\?: number;/);
+  assert.match(body, /inherit_routing\?: boolean;/);
+  for (const field of [
+    "block",
+    "outbound",
+    "inherit_block",
+    "inherit_outbound",
+  ])
+    assert.doesNotMatch(body, new RegExp(`\\n    ${field}\\??:`));
 });

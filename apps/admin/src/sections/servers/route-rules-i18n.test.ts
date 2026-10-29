@@ -16,5 +16,29 @@ describe("structured route-rule translations", () => {
     expect(Object.keys(zh.route_rules.errors).sort()).toEqual(
       Object.keys(en.route_rules.errors).sort()
     );
+    expect(Object.keys(zh.ordered_routing).sort()).toEqual(
+      Object.keys(en.ordered_routing).sort()
+    );
+    expect(Object.keys(zh.ordered_routing.errors).sort()).toEqual(
+      Object.keys(en.ordered_routing.errors).sort()
+    );
+    expect(en.server_config.fields.add_outbound).toBeTruthy();
+    expect(zh.server_config.fields.add_outbound).toBeTruthy();
+    expect(Object.keys(zh.dns_editor).sort()).toEqual(
+      Object.keys(en.dns_editor).sort()
+    );
+  });
+  it("explains offline saves, old-node 426 and copy recovery in both locales", () => {
+    for (const locale of [en, zh]) {
+      expect(locale.ordered_routing.offline_save).toContain("426");
+      expect(locale.ordered_routing.copy_partial_title).toContain("{{id}}");
+      expect(locale.ordered_routing.copy_partial_title).toContain("{{name}}");
+      expect(locale.ordered_routing.copy_retry).toBeTruthy();
+      expect(locale.ordered_routing.copy_edit).toBeTruthy();
+      expect(Object.hasOwn(locale.ordered_routing, "server_ready")).toBe(false);
+      expect(Object.hasOwn(locale.ordered_routing, "copy_unavailable")).toBe(
+        false
+      );
+    }
   });
 });

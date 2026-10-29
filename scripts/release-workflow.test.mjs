@@ -58,6 +58,15 @@ test("fork releases are tag-gated and use the built-in repository token", async 
   assert.match(workflow, /scripts\/swagger-contract\.test\.mjs/);
   assert.match(workflow, /scripts\/openapi-source-contract\.test\.mjs/);
   assert.match(workflow, /scripts\/openapi-generator-contract\.test\.mjs/);
+  assert.match(
+    workflow,
+    /name: Verify generated OpenAPI client\n\s+run: bun run test:openapi/
+  );
+  assert.ok(
+    workflow.indexOf("run: bun run test:openapi") <
+      workflow.indexOf("bash scripts/build-release.sh"),
+    "OpenAPI regeneration must pass before release builds"
+  );
   for (const asset of [
     "ppanel-admin-web.tar.gz",
     "ppanel-user-web.tar.gz",
@@ -73,6 +82,17 @@ test("fork releases are tag-gated and use the built-in repository token", async 
     );
   }
   assert.match(workflow, /No archive embeds an API host or supplier fallback/);
+});
+
+test("ordinary root tests and releases execute real OpenAPI regeneration", async () => {
+  const pkg = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8")
+  );
+  assert.match(pkg.scripts.test, /bun run test:openapi/);
+  assert.match(
+    pkg.scripts["test:openapi"],
+    /bun test .*scripts\/openapi-regeneration\.test\.mjs/
+  );
 });
 
 test("release variants keep an empty API base and established prefixes", async () => {

@@ -15,7 +15,6 @@ export type RouteRuleIssueCode =
   | "regexBackreference"
   | "regexLookaround"
   | "ruleTooLong"
-  | "serializedTooLarge"
   | "tooManyRules"
   | "unknownPrefix"
   | "unsupportedProtocol";
@@ -29,7 +28,6 @@ export type RouteRuleIssue = {
 
 export const MAX_ROUTE_RULES = 1024;
 export const MAX_ROUTE_RULE_BYTES = 4096;
-export const MAX_PERSISTED_JSON_BYTES = 60 * 1024;
 
 const DOMAIN_PREFIXES = new Set([
   "domain",
@@ -74,15 +72,6 @@ export function normalizeRuleLines(value: string | string[] | undefined) {
   return [...new Set(values.map((item) => item.trim()).filter(Boolean))];
 }
 
-export function supportsStructuredRouteRules(
-  value: Record<string, unknown> | null | undefined
-) {
-  if (!value) return false;
-  return (
-    Object.hasOwn(value, "block_ips") && Object.hasOwn(value, "block_protocols")
-  );
-}
-
 function isValidIP(value: string) {
   return (
     ipv4Schema.safeParse(value).success || ipv6Schema.safeParse(value).success
@@ -112,7 +101,7 @@ function domainWithoutRootDot(value: string) {
   return value.endsWith(".") ? value.slice(0, -1) : value;
 }
 
-function validDomainValue(value: string) {
+export function validDomainValue(value: string) {
   if (!value || /[\s/:#]/.test(value)) return false;
   const name = domainWithoutRootDot(value);
   return (
@@ -127,6 +116,7 @@ function validateRegex(value: string): RouteRuleIssueCode | undefined {
 
   let inClass = false;
   let inQuotedLiteral = false;
+  let parentheses = 0;
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index];
     const next = value[index + 1];
@@ -139,6 +129,7 @@ function validateRegex(value: string): RouteRuleIssueCode | undefined {
       continue;
     }
     if (character === "\\") {
+      if (next === undefined) return "invalidRegex";
       if (next === "Q" && !inClass) {
         inQuotedLiteral = true;
         index += 1;
@@ -162,23 +153,40 @@ function validateRegex(value: string): RouteRuleIssueCode | undefined {
       continue;
     }
     if (character === "[") {
-      inClass = true;
+      if (inClass && next === ":") {
+        const end = value.indexOf(":]", index + 2);
+        if (end < 0) return "invalidRegex";
+        index = end + 1;
+      } else if (!inClass) inClass = true;
       continue;
     }
     if (character === "]" && inClass) {
       inClass = false;
       continue;
     }
-    if (
-      !inClass &&
-      character === "(" &&
-      next === "?" &&
-      (value[index + 2] === "=" ||
-        value[index + 2] === "!" ||
-        (value[index + 2] === "<" &&
-          (value[index + 3] === "=" || value[index + 3] === "!")))
-    ) {
-      return "regexLookaround";
+    if (!inClass && character === "(") {
+      if (
+        next === "?" &&
+        (value[index + 2] === "=" ||
+          value[index + 2] === "!" ||
+          (value[index + 2] === "<" &&
+            (value[index + 3] === "=" || value[index + 3] === "!")))
+      )
+        return "regexLookaround";
+      parentheses += 1;
+    } else if (!inClass && character === ")") {
+      if (parentheses === 0) return "invalidRegex";
+      parentheses -= 1;
+    }
+  }
+  if (inClass || parentheses !== 0) return "invalidRegex";
+  // Check common syntax without rejecting RE2-only flags, POSIX classes,
+  // quoted literals or Unicode/hex escapes that JavaScript parses differently.
+  if (!/\\[QE1-9]|\\[pP]\{|\\x\{|\(\?[imsU-]|\(\?P<|\[\[:/.test(value)) {
+    try {
+      new RegExp(value);
+    } catch {
+      return "invalidRegex";
     }
   }
 
@@ -442,14 +450,6 @@ export function validateRouteRules(
       index: -1,
       line: 0,
       value: String(MAX_ROUTE_RULES),
-    });
-  }
-  if (serializedJSONByteLength(canonicalValues) >= MAX_PERSISTED_JSON_BYTES) {
-    issues.push({
-      code: "serializedTooLarge",
-      index: -1,
-      line: 0,
-      value: String(MAX_PERSISTED_JSON_BYTES),
     });
   }
   return issues;

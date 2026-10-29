@@ -60,6 +60,9 @@ jobs:
           NODE_ENV=test bun test tests/functions/pages-proxy.test.ts tests/functions/api-dev-proxy.test.ts
           node --test scripts/release-workflow.test.mjs scripts/release-dist-privacy.test.mjs scripts/swagger-contract.test.mjs scripts/openapi-source-contract.test.mjs scripts/openapi-generator-contract.test.mjs
 
+      - name: Verify generated OpenAPI client
+        run: bun run test:openapi
+
       - name: Validate the release version
         if: startsWith(github.ref, 'refs/tags/v')
         env:
