@@ -70,6 +70,7 @@ import {
   validateNodeRouting,
 } from "./node-routing";
 import { NodeRoutingEditor } from "./node-routing-editor";
+import { RoutingDNS } from "./routing-dns";
 import { RoutingConflict, RoutingStatus } from "./routing-status";
 
 const dnsConfigSchema = z.object({
@@ -200,6 +201,7 @@ export default function ServerNodeConfig({
   const [routing, setRouting] = useState<API.NodeRouting>();
   const [routingDirty, setRoutingDirty] = useState(false);
   const [inheritRouting, setInheritRouting] = useState(true);
+  const [allowDowngrade, setAllowDowngrade] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [saveError, setSaveError] = useState<string>();
@@ -246,6 +248,7 @@ export default function ServerNodeConfig({
       setSnapshot({ serverId: server.id, config });
       setRouting(routingContentFromProjection(config.effective.routing));
       setInheritRouting(config.override.inherit_routing);
+      setAllowDowngrade(false);
       setRoutingDirty(false);
       form.reset(getFormValues(config));
     },
@@ -279,15 +282,31 @@ export default function ServerNodeConfig({
       isRoutingRevision(cfgResp.override.routing_revision) &&
       isRoutingRevision(cfgResp.global.routing_revision) &&
       cfgResp.global.routing_revision > 0 &&
-      cfgResp.global.routing_mode === "global-v1" &&
-      cfgResp.effective.routing_mode ===
-        (cfgResp.override.inherit_routing ? "global-v1" : "local-v1") &&
+      ["global-v1", "global-v2"].includes(cfgResp.global.routing_mode) &&
+      (cfgResp.override.inherit_routing
+        ? ["global-v1", "global-v2"]
+        : ["local-v1", "local-v2"]
+      ).includes(cfgResp.effective.routing_mode) &&
       cfgResp.override.inherit_routing === (cfgResp.override.routing === null)
+  );
+
+  const explicitDNS = Boolean(
+    (inheritRouting ? globalPolicy : routing)?.dns_policy
+  );
+  const hiddenDNSDraft =
+    explicitDNS && Boolean(dirtyFields.inherit_dns || dirtyFields.dns);
+
+  const needsDowngrade = Boolean(
+    inheritDirty &&
+      inheritRouting &&
+      cfgResp?.override.routing?.version === 2 &&
+      globalPolicy?.version === 1
   );
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && (saving || refreshingStatus)) return;
-    if (nextOpen && queryConfig && !conflict) {
+    if (!nextOpen && !saveError && !conflict) holdDraft.current = false;
+    if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
       holdDraft.current = false;
       resetConfig(queryConfig);
     }
@@ -338,6 +357,8 @@ export default function ServerNodeConfig({
     if (
       conflict ||
       !validConfig ||
+      hiddenDNSDraft ||
+      (needsDowngrade && !allowDowngrade) ||
       (routingChanged &&
         !inheritRouting &&
         (!routing || validateNodeRouting(routing).length))
@@ -345,7 +366,6 @@ export default function ServerNodeConfig({
       return;
     const payload: API.UpdateServerNodeConfigRequest = {
       server_id: server.id,
-      routing_revision: cfgResp!.override.routing_revision,
     };
     if (dirtyFields.inherit_ip_strategy || dirtyFields.ip_strategy) {
       payload.inherit_ip_strategy = values.inherit_ip_strategy;
@@ -368,8 +388,11 @@ export default function ServerNodeConfig({
       }
     }
     if (routingChanged) {
-      if (inheritRouting) payload.inherit_routing = true;
-      else payload.routing = routing;
+      payload.routing_revision = cfgResp!.override.routing_revision;
+      if (inheritRouting) {
+        payload.inherit_routing = true;
+        if (needsDowngrade) payload.routing_downgrade = true;
+      } else payload.routing = routing;
     }
     const revision = cfgResp!.override.routing_revision;
     holdDraft.current = true;
@@ -417,7 +440,14 @@ export default function ServerNodeConfig({
       await readBack(false);
     } catch (error) {
       const message = safeBackendError(error);
-      if (message) setSaveError(message);
+      if (message || isDefiniteRejection(error))
+        setSaveError(
+          message ||
+            t(
+              "ordered_routing.save_error",
+              "Save failed. Refresh to verify the current state before retrying."
+            )
+        );
       if (isRoutingConflict(error)) setConflict(true);
       else if (isDefiniteRejection(error))
         toast.error(
@@ -506,12 +536,14 @@ export default function ServerNodeConfig({
                     <Badge
                       className="px-1.5 py-0"
                       variant={
-                        inheritIPStrategy && inheritDNS
+                        inheritIPStrategy &&
+                        (explicitDNS ? inheritRouting : inheritDNS)
                           ? "secondary"
                           : "outline"
                       }
                     >
-                      {inheritIPStrategy && inheritDNS
+                      {inheritIPStrategy &&
+                      (explicitDNS ? inheritRouting : inheritDNS)
                         ? t("server_node_config.modeInherited", "Inherited")
                         : t("server_node_config.modeCustom", "Custom")}
                     </Badge>
@@ -664,68 +696,89 @@ export default function ServerNodeConfig({
                           )}
                         </section>
 
-                        <section className="space-y-3 border-t pt-4">
-                          <ToggleField
-                            control={form.control}
-                            customText={t(
-                              "server_node_config.modeCustom",
-                              "Custom"
+                        {hiddenDNSDraft && (
+                          <p className="text-destructive text-sm" role="alert">
+                            {t(
+                              "ordered_routing.legacy_dns_draft",
+                              "Legacy DNS has unsaved changes. Return to legacy DNS mode to save or revert them first."
                             )}
-                            description={t(
-                              "server_node_config.inherit_dns_desc",
-                              "Turn this off to maintain a DNS list only for this server."
+                          </p>
+                        )}
+                        {!explicitDNS && (
+                          <section className="space-y-3 border-t pt-4">
+                            <ToggleField
+                              control={form.control}
+                              customText={t(
+                                "server_node_config.modeCustom",
+                                "Custom"
+                              )}
+                              description={t(
+                                "server_node_config.inherit_dns_desc",
+                                "Turn this off to maintain a DNS list only for this server."
+                              )}
+                              inheritedText={t(
+                                "server_node_config.modeInherited",
+                                "Inherited"
+                              )}
+                              label={t(
+                                "server_node_config.inherit_dns",
+                                "Use global DNS configuration"
+                              )}
+                              name="inherit_dns"
+                              onDraftStart={() => {
+                                holdDraft.current = true;
+                              }}
+                            />
+                            {inheritDNS ? (
+                              <InheritedPreview
+                                description={t(
+                                  "server_node_config.global_dns_summary",
+                                  "{{count}} DNS entries are provided by the global configuration.",
+                                  { count: cfgResp.global.dns?.length || 0 }
+                                )}
+                                title={t(
+                                  "server_node_config.globalPreview",
+                                  "Using global configuration"
+                                )}
+                              />
+                            ) : (
+                              <FormField
+                                control={form.control}
+                                name="dns"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {t(
+                                        "server_config.fields.dns_config",
+                                        "DNS Configuration"
+                                      )}
+                                    </FormLabel>
+                                    <DNSEditor
+                                      onChange={(values) => {
+                                        holdDraft.current = true;
+                                        form.clearErrors("dns");
+                                        field.onChange(values);
+                                      }}
+                                      value={field.value || []}
+                                    />
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
                             )}
-                            inheritedText={t(
-                              "server_node_config.modeInherited",
-                              "Inherited"
-                            )}
-                            label={t(
-                              "server_node_config.inherit_dns",
-                              "Use global DNS configuration"
-                            )}
-                            name="inherit_dns"
-                            onDraftStart={() => {
+                          </section>
+                        )}
+                        {validConfig && routing && globalPolicy && (
+                          <RoutingDNS
+                            value={inheritRouting ? globalPolicy : routing}
+                            readOnly={inheritRouting}
+                            onChange={(next) => {
                               holdDraft.current = true;
+                              setRouting(next);
+                              setRoutingDirty(true);
                             }}
                           />
-                          {inheritDNS ? (
-                            <InheritedPreview
-                              description={t(
-                                "server_node_config.global_dns_summary",
-                                "{{count}} DNS entries are provided by the global configuration.",
-                                { count: cfgResp.global.dns?.length || 0 }
-                              )}
-                              title={t(
-                                "server_node_config.globalPreview",
-                                "Using global configuration"
-                              )}
-                            />
-                          ) : (
-                            <FormField
-                              control={form.control}
-                              name="dns"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>
-                                    {t(
-                                      "server_config.fields.dns_config",
-                                      "DNS Configuration"
-                                    )}
-                                  </FormLabel>
-                                  <DNSEditor
-                                    onChange={(values) => {
-                                      holdDraft.current = true;
-                                      form.clearErrors("dns");
-                                      field.onChange(values);
-                                    }}
-                                    value={field.value || []}
-                                  />
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          )}
-                        </section>
+                        )}
                       </TabsContent>
 
                       <TabsContent className="space-y-4" value="routing">
@@ -742,6 +795,8 @@ export default function ServerNodeConfig({
                             isDirty
                           }
                           status={cfgResp.routing_status}
+                          version={cfgResp.effective.routing.version}
+                          desiredSnapshotID={cfgResp.desired_snapshot_id}
                         />
                         <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
                           <div className="space-y-1">
@@ -776,6 +831,21 @@ export default function ServerNodeConfig({
                             }}
                           />
                         </div>
+                        {needsDowngrade && (
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={allowDowngrade}
+                              onChange={(event) =>
+                                setAllowDowngrade(event.target.checked)
+                              }
+                            />
+                            {t(
+                              "ordered_routing.confirm_downgrade",
+                              "Confirm loss of v2 routing features when inheriting the v1 global policy"
+                            )}
+                          </label>
+                        )}
                         <p className="text-muted-foreground text-sm">
                           {inheritRouting
                             ? t(
@@ -854,6 +924,8 @@ export default function ServerNodeConfig({
                 conflict ||
                 isLoading ||
                 isError ||
+                (needsDowngrade && !allowDowngrade) ||
+                hiddenDNSDraft ||
                 !validConfig ||
                 !(isDirty || routingChanged) ||
                 (routingChanged &&

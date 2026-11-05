@@ -12,6 +12,7 @@ import {
 } from "./node-routing";
 import { OutboundConfigInput } from "./outbound-config-input";
 import { RoutingRuleDialog } from "./routing-rule-dialog";
+import { RoutingUsers } from "./routing-users";
 
 export function NodeRoutingEditor({
   value,
@@ -45,7 +46,21 @@ export function NodeRoutingEditor({
     const rules = [...value.rules];
     if (index < 0) rules.push(rule);
     else rules[index] = rule;
-    onChange({ ...value, rules });
+    const previous = value.rules[index];
+    const scopeChanged =
+      JSON.stringify(previous?.user_ids || []) !==
+      JSON.stringify(rule.user_ids || []);
+    if (!rule.user_ids?.length) delete rule.user_ids;
+    onChange(
+      scopeChanged
+        ? {
+            ...value,
+            version: 2,
+            user_defaults: value.user_defaults || [],
+            rules,
+          }
+        : { ...value, rules }
+    );
     setEditing(null);
   }
   function renderRule(rule: API.NodeRouteRule, index: number) {
@@ -88,6 +103,12 @@ export function NodeRoutingEditor({
         <div className="whitespace-pre-wrap break-words text-sm [overflow-wrap:anywhere]">
           {rule.values.join("\n")}
         </div>
+        {rule.user_ids?.length ? (
+          <p className="text-muted-foreground text-sm">
+            {t("ordered_routing.user_scope", "Account scope")}:{" "}
+            {rule.user_ids.map((id) => `#${id}`).join(", ")}
+          </p>
+        ) : null}
         {readOnly ? null : (
           <div className="flex flex-wrap gap-1">
             <Button
@@ -151,6 +172,14 @@ export function NodeRoutingEditor({
   }
   return (
     <div className="min-w-0 space-y-5">
+      {value.version === 2 && (
+        <p className="text-destructive text-sm" role="alert">
+          {t(
+            "ordered_routing.v2_warning",
+            "Before enabling v2, upgrade all affected nodes; stop or upgrade offline or unknown nodes. Older running nodes may continue using their previous policy."
+          )}
+        </p>
+      )}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold">
@@ -220,6 +249,68 @@ export function NodeRoutingEditor({
             )}
           </p>
         ) : null}
+        <div className="space-y-3 border-t pt-3">
+          <h4 className="font-medium">
+            {t("ordered_routing.user_defaults", "Account default outbounds")}
+          </h4>
+          <p className="text-muted-foreground text-sm">
+            {t(
+              "ordered_routing.user_defaults_hint",
+              "Used only after all ordered rules have been checked; explicit direct rules take precedence."
+            )}
+          </p>
+          {(value.user_defaults || []).map((entry) => (
+            <div
+              className="flex flex-wrap items-center gap-2"
+              key={entry.user_id}
+            >
+              <span>#{entry.user_id}</span>
+              <select
+                disabled={readOnly}
+                aria-label={t(
+                  "ordered_routing.user_default_target",
+                  "Account default outbound"
+                )}
+                className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                value={entry.outbound_id}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    user_defaults: (value.user_defaults || []).map((item) =>
+                      item.user_id === entry.user_id
+                        ? { ...item, outbound_id: event.target.value }
+                        : item
+                    ),
+                  })
+                }
+              >
+                {options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+          {!readOnly && (
+            <RoutingUsers
+              defaults
+              value={(value.user_defaults || []).map((entry) => entry.user_id)}
+              onChange={(users) =>
+                onChange({
+                  ...value,
+                  version: 2,
+                  user_defaults: users.map(
+                    (user_id) =>
+                      (value.user_defaults || []).find(
+                        (entry) => entry.user_id === user_id
+                      ) || { user_id, outbound_id: "direct" }
+                  ),
+                })
+              }
+            />
+          )}
+        </div>
         <div className="space-y-2">
           <Label htmlFor={defaultID}>
             {t("ordered_routing.default", "Default outbound")}
@@ -266,7 +357,16 @@ export function NodeRoutingEditor({
           <OutboundConfigInput
             deleteReason={(id) => {
               const refs = outboundReferences(value, id);
-              if (!(refs.isDefault || refs.rules.length)) return;
+              if (
+                !(
+                  refs.isDefault ||
+                  refs.rules.length ||
+                  refs.chains.length ||
+                  refs.users.length ||
+                  refs.resolvers.length
+                )
+              )
+                return;
               const names = refs.rules
                 .map((rule) => rule.remark || rule.id)
                 .join(", ");
@@ -279,13 +379,38 @@ export function NodeRoutingEditor({
                       ? t("ordered_routing.default", "Default outbound")
                       : "",
                     names,
+                    ...refs.chains.map((entry) => entry.name),
+                    ...refs.users.map((entry) => `#${entry.user_id}`),
+                    ...refs.resolvers.map((entry) => entry.id),
                   ]
                     .filter(Boolean)
                     .join(", "),
                 }
               );
             }}
-            onChange={(outbounds) => onChange({ ...value, outbounds })}
+            onChange={(outbounds) => {
+              const chainChanged =
+                JSON.stringify(
+                  value.outbounds
+                    .map((item) => [item.id, item.via_outbound_id || ""])
+                    .filter(([, via]) => via)
+                ) !==
+                JSON.stringify(
+                  outbounds
+                    .map((item) => [item.id, item.via_outbound_id || ""])
+                    .filter(([, via]) => via)
+                );
+              onChange(
+                chainChanged
+                  ? {
+                      ...value,
+                      version: 2,
+                      user_defaults: value.user_defaults || [],
+                      outbounds,
+                    }
+                  : { ...value, outbounds }
+              );
+            }}
             value={value.outbounds}
           />
         )}

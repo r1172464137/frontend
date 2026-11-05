@@ -19,6 +19,15 @@
     "description": "Configure currency units, symbols, and exchange rate API settings",
     "title": "Currency Configuration"
   },
+  "interface": {
+    "title": "Interface Settings",
+    "description": "Show or hide admin menu items for all administrators",
+    "systemRequired": "System settings is always visible.",
+    "restore": "Show all",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load interface settings",
+    "retry": "Retry"
+  },
   "invite": {
     "description": "Configure user invitation and referral reward settings",
     "forcedInvite": "Require Invitation to Register",

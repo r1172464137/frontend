@@ -144,18 +144,18 @@ export async function applyServerCopy(task: ServerCopyTask): Promise<boolean> {
   const revision = initial.override.routing_revision;
   const payload: API.UpdateServerNodeConfigRequest = {
     server_id: task.target.id,
-    routing_revision: revision,
   };
   if (!serverWriteMatches(ipPayload(task), initial, revision))
     Object.assign(payload, ipPayload(task));
   if (!serverWriteMatches(dnsPayload(task), initial, revision))
     Object.assign(payload, dnsPayload(task));
   if (!routingMatches(task, initial.override)) {
+    payload.routing_revision = revision;
     if (task.desired.inherit_routing) payload.inherit_routing = true;
     else if (task.desired.routing) payload.routing = task.desired.routing;
     else return false;
   }
-  if (Object.keys(payload).length === 2) return copyMatches(task, initial);
+  if (Object.keys(payload).length === 1) return copyMatches(task, initial);
   try {
     await postServerNodeConfigUpdate(payload, copyRequestOptions);
   } catch {

@@ -298,6 +298,216 @@ afterEach(() => {
 });
 
 describe("cutover node configuration forms", () => {
+  it("saves and reopens explicit DNS as a v2 routing package without changing v1 rules", async () => {
+    render(<ServerConfig />);
+    openGlobal();
+    const tab = screen.getByRole("tab", { name: "DNS Configuration" });
+    fireEvent.mouseDown(tab);
+    fireEvent.click(tab);
+    fireEvent.click(
+      screen.getByLabelText(
+        "Use explicit DNS policy (otherwise use legacy DNS)"
+      )
+    );
+    fireEvent.change(screen.getByLabelText("Resolver address"), {
+      target: { value: "dns.example.test:53" },
+    });
+    fireEvent.change(
+      screen.getByLabelText("Bootstrap IP (hostname resolver)"),
+      {
+        target: { value: "192.0.2.53" },
+      }
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledTimes(1));
+    const payload = mocks.update.mock
+      .calls[0]![0] as API.UpdateNodeConfigRequest;
+    expect(payload.routing_revision).toBe(11);
+    expect(payload.routing).toMatchObject({
+      version: 2,
+      user_defaults: [],
+      rules: policy.rules,
+      outbounds: policy.outbounds,
+      dns_policy: {
+        query_strategy: "UseIP",
+        resolvers: [
+          {
+            protocol: "udp",
+            address: "dns.example.test:53",
+            bootstrap_ip: "192.0.2.53",
+            domains: [],
+            outbound_id: "direct",
+          },
+        ],
+      },
+    });
+    expect(payload.dns).toBeUndefined();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(
+      screen
+        .getByText("Node configuration")
+        .closest("[data-slot='sheet-trigger']")!
+    );
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "DNS Configuration" }));
+    fireEvent.click(screen.getByRole("tab", { name: "DNS Configuration" }));
+    expect(
+      (screen.getByLabelText("Resolver address") as HTMLInputElement).value
+    ).toBe("dns.example.test:53");
+    expect(
+      (
+        screen.getByLabelText(
+          "Bootstrap IP (hostname resolver)"
+        ) as HTMLInputElement
+      ).value
+    ).toBe("192.0.2.53");
+  });
+  it("switches global DNS modes without losing a legacy DNS draft", () => {
+    mocks.config = {
+      ...globalConfig(),
+      dns: [{ proto: "udp", address: "1.1.1.1", domains: [] }],
+    };
+    render(<ServerConfig />);
+    openGlobal();
+    const tab = screen.getByRole("tab", { name: "DNS Configuration" });
+    fireEvent.mouseDown(tab);
+    fireEvent.click(tab);
+    fireEvent.change(screen.getByLabelText("Resolver address"), {
+      target: { value: "9.9.9.9" },
+    });
+    fireEvent.click(
+      screen.getByLabelText(
+        "Use explicit DNS policy (otherwise use legacy DNS)"
+      )
+    );
+    expect(
+      screen.queryByRole("button", { name: "Add UDP resolver" })
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "Legacy DNS has unsaved changes. Return to legacy DNS mode to save or revert them first."
+      )
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(screen.getByText("IP Strategy")).toBeTruthy();
+    act(() =>
+      mocks.pushData?.({
+        ...globalConfig(),
+        dns: [{ proto: "udp", address: "8.8.8.8", domains: [] }],
+      })
+    );
+    fireEvent.click(
+      screen.getByLabelText(
+        "Use explicit DNS policy (otherwise use legacy DNS)"
+      )
+    );
+    expect(
+      (screen.getByLabelText("Resolver address") as HTMLInputElement).value
+    ).toBe("9.9.9.9");
+    expect(
+      screen.getByRole("button", { name: "Add UDP resolver" })
+    ).toBeTruthy();
+  });
+  it("hides legacy DNS for inherited explicit routing and leaves IP strategy available", () => {
+    const config = serverConfig();
+    const explicit: API.NodeRouting = {
+      ...policy,
+      version: 2,
+      user_defaults: [],
+      dns_policy: {
+        query_strategy: "UseIP",
+        resolvers: [
+          {
+            id: "dns_44444444-4444-4444-8444-444444444444",
+            protocol: "udp",
+            address: "192.0.2.53",
+            domains: [],
+            outbound_id: "direct",
+          },
+        ],
+      },
+    };
+    config.global.routing = { ...config.global.routing, ...explicit };
+    config.effective.routing = { ...config.effective.routing, ...explicit };
+    config.override.inherit_dns = false;
+    config.override.dns = [{ proto: "udp", address: "1.1.1.1", domains: [] }];
+    mocks.config = config;
+    render(<ServerNodeConfig server={server} />);
+    fireEvent.click(screen.getByRole("button", { name: "Node Config" }));
+    expect(
+      screen.queryByRole("switch", { name: "Use global DNS configuration" })
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Add UDP resolver" })
+    ).toBeNull();
+    expect(
+      screen.getByRole("switch", { name: "Use global IP strategy" })
+    ).toBeTruthy();
+    expect(
+      (
+        screen.getByLabelText(
+          "Use explicit DNS policy (otherwise use legacy DNS)"
+        ) as HTMLButtonElement
+      ).disabled
+    ).toBe(true);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Ordered routing" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ordered routing" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Use global routing" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /DNS Configuration/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /DNS Configuration/ }));
+    fireEvent.click(
+      screen.getByLabelText(
+        "Use explicit DNS policy (otherwise use legacy DNS)"
+      )
+    );
+    expect(
+      screen.getByRole("button", { name: "Add UDP resolver" })
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText("Resolver address") as HTMLInputElement).value
+    ).toBe("1.1.1.1");
+  });
+  it("preserves a local server legacy DNS draft when switching DNS modes", () => {
+    const config = serverConfig(true);
+    config.override.inherit_dns = false;
+    config.override.dns = [{ proto: "udp", address: "1.1.1.1", domains: [] }];
+    mocks.config = config;
+    render(<ServerNodeConfig server={server} />);
+    fireEvent.click(screen.getByRole("button", { name: "Node Config" }));
+    fireEvent.change(screen.getByLabelText("Resolver address"), {
+      target: { value: "9.9.9.9" },
+    });
+    fireEvent.click(
+      screen.getByLabelText(
+        "Use explicit DNS policy (otherwise use legacy DNS)"
+      )
+    );
+    expect(
+      screen.queryByRole("button", { name: "Add UDP resolver" })
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "Legacy DNS has unsaved changes. Return to legacy DNS mode to save or revert them first."
+      )
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    fireEvent.click(
+      screen.getByLabelText(
+        "Use explicit DNS policy (otherwise use legacy DNS)"
+      )
+    );
+    expect(
+      (screen.getByLabelText("Resolver address") as HTMLInputElement).value
+    ).toBe("9.9.9.9");
+    expect(
+      screen.getByRole("button", { name: "Add UDP resolver" })
+    ).toBeTruthy();
+  });
   it("resets the global DNS editor when an authoritative refresh returns []", async () => {
     mocks.config = {
       ...globalConfig(),
@@ -498,11 +708,9 @@ describe("cutover node configuration forms", () => {
     await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
     const payload = mocks.update.mock
       .calls[0]![0] as API.UpdateNodeConfigRequest;
-    expect(payload).toMatchObject({
-      node_pull_interval: 90,
-      routing_revision: 11,
-    });
+    expect(payload).toMatchObject({ node_pull_interval: 90 });
     for (const field of [
+      "routing_revision",
       "routing",
       "block",
       "block_ips",
@@ -633,6 +841,11 @@ describe("cutover node configuration forms", () => {
       (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
         .disabled
     ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    openGlobal();
+    expect(
+      screen.getByRole("button", { name: "Move 1. Second down" })
+    ).toBeTruthy();
     fireEvent.click(
       screen.getByRole("button", { name: "Move 1. Second down" })
     );
@@ -873,6 +1086,43 @@ describe("cutover node configuration forms", () => {
     expect(
       screen.getByRole("button", { name: "Move 2. Second up" })
     ).toBeTruthy();
+  });
+  it.each([
+    1, 2,
+  ] as const)("requires downgrade confirmation only when inheriting global v%i from local v2", async (globalVersion) => {
+    const config = serverConfig(true);
+    const local = { ...policy, version: 2 as const, user_defaults: [] };
+    config.override.routing = local;
+    config.effective.routing = { ...config.effective.routing, ...local };
+    if (globalVersion === 2)
+      config.global.routing = {
+        ...config.global.routing,
+        version: 2,
+        user_defaults: [],
+      };
+    mocks.config = config;
+    render(<ServerNodeConfig server={server} />);
+    openServer();
+    fireEvent.click(screen.getByRole("switch", { name: "Use global routing" }));
+    const confirm = screen.queryByLabelText(
+      /Confirm loss of v2 routing features/
+    );
+    if (globalVersion === 1) {
+      expect(confirm).toBeTruthy();
+      expect(
+        (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+          .disabled
+      ).toBe(true);
+      fireEvent.click(confirm!);
+    } else expect(confirm).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mocks.serverUpdate).toHaveBeenCalledTimes(1));
+    const payload = mocks.serverUpdate.mock
+      .calls[0]![0] as API.UpdateServerNodeConfigRequest;
+    expect(payload.inherit_routing).toBe(true);
+    expect(payload.routing_downgrade).toBe(
+      globalVersion === 1 ? true : undefined
+    );
   });
   it("copies inherited global routing into a local draft, saves it, then explicitly returns to inheritance", async () => {
     mocks.config = serverConfig();

@@ -19,6 +19,15 @@
     "description": "配置货币单位、符号和汇率 API 设置",
     "title": "货币配置"
   },
+  "interface": {
+    "title": "界面设置",
+    "description": "为所有管理员显示或隐藏管理菜单项",
+    "systemRequired": "系统设置始终显示。",
+    "restore": "恢复全部显示",
+    "loading": "加载中…",
+    "loadFailed": "界面设置加载失败",
+    "retry": "重试"
+  },
   "invite": {
     "description": "配置用户邀请和推荐奖励设置",
     "forcedInvite": "强制邀请注册",

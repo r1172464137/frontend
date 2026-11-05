@@ -207,14 +207,19 @@ it.each([
 });
 it("bundled backend OpenAPI matches the cutover-only management fields", () => {
   const spec: {
-    definitions: Record<string, { properties: Record<string, unknown> }>;
+    definitions: Record<
+      string,
+      { properties: Record<string, unknown>; required?: string[] }
+    >;
     paths: Record<string, unknown>;
   } = JSON.parse(readFileSync("../../docs/public/swagger/ppanel.json", "utf8"));
   const keys = (name: string) =>
     Object.keys(spec.definitions[name]!.properties).sort();
-  expect(keys("dto.NodeConfig")).toEqual(Object.keys(globalConfig).sort());
+  expect(keys("dto.NodeConfig")).toEqual(
+    [...Object.keys(globalConfig), "routing_downgrade"].sort()
+  );
   expect(keys("dto.GetServerNodeConfigResponse")).toEqual(
-    Object.keys(serverConfig).sort()
+    [...Object.keys(serverConfig), "desired_snapshot_id"].sort()
   );
   expect(keys("dto.ServerNodeConfigOverride")).toEqual(
     Object.keys(serverConfig.override).sort()
@@ -230,13 +235,196 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
       "inherit_routing",
       "ip_strategy",
       "routing",
+      "routing_downgrade",
       "routing_revision",
       "server_id",
     ].sort()
   );
+  const routingFields = [
+    "version",
+    "outbounds",
+    "rules",
+    "default_outbound_id",
+    "user_defaults",
+    "dns_policy",
+  ];
+  const identityFields = [
+    "mode",
+    "source",
+    "source_server_id",
+    "source_revision",
+    "local_transition_revision",
+  ];
+  const ruleFields = [
+    "id",
+    "enabled",
+    "remark",
+    "kind",
+    "values",
+    "user_ids",
+    "outbound_id",
+  ];
+  const outboundFields = [
+    "address",
+    "allow_insecure",
+    "alpn",
+    "cipher",
+    "congestion_controller",
+    "encryption",
+    "encryption_client_padding",
+    "encryption_mode",
+    "encryption_password",
+    "encryption_rtt",
+    "encryption_ticket",
+    "fingerprint",
+    "flow",
+    "heartbeat",
+    "host",
+    "id",
+    "ip_rules",
+    "multiplex",
+    "name",
+    "password",
+    "path",
+    "plugin",
+    "plugin_opts",
+    "port",
+    "protocol",
+    "protocol_rules",
+    "reality_public_key",
+    "reality_short_id",
+    "reduce_rtt",
+    "rules",
+    "security",
+    "service_name",
+    "settings",
+    "sni",
+    "spider_x",
+    "stream_settings",
+    "transport",
+    "udp_stream",
+    "uot",
+    "uot_version",
+    "user",
+    "uuid",
+    "via_outbound_id",
+    "xhttp_extra",
+    "xhttp_mode",
+  ];
+  expect(keys("config.NodeRouting")).toEqual([...routingFields].sort());
+  expect(keys("dto.NodeRoutingPolicy")).toEqual(
+    [...routingFields, ...identityFields].sort()
+  );
+  for (const name of ["config.NodeRoute", "dto.NodeRoutingRule"])
+    expect(keys(name)).toEqual([...ruleFields].sort());
+  for (const name of ["config.NodeOutbound", "dto.NodeOutbound"])
+    expect(keys(name)).toEqual([...outboundFields].sort());
+  expect(keys("config.NodeUserDefault")).toEqual(["outbound_id", "user_id"]);
+  expect(keys("config.NodeDNSPolicy")).toEqual(["query_strategy", "resolvers"]);
+  expect(keys("config.NodeDNSResolver")).toEqual([
+    "address",
+    "bootstrap_ip",
+    "domains",
+    "id",
+    "outbound_id",
+    "protocol",
+  ]);
+  expect(keys("dto.RoutingCandidateIdentity")).toEqual(
+    [...identityFields, "snapshot_id"].sort()
+  );
+  expect(keys("dto.RoutingReportError")).toEqual([
+    "identity",
+    "message",
+    "stage",
+  ]);
+  expect(keys("dto.RoutingStatusView")).toEqual([
+    "known",
+    "report",
+    "reporter_verified",
+  ]);
+  expect(keys("dto.RoutingStatusReport")).toEqual([
+    "conflict",
+    "instance_id",
+    "liveness_at",
+    "received_at",
+    "routing_applied",
+    "routing_error",
+    "routing_pending",
+    "routing_sequence",
+    "routing_version",
+    "updated_at",
+  ]);
+  expect(spec.definitions["config.NodeRouting"]!.properties).toMatchObject({
+    dns_policy: { $ref: "#/definitions/config.NodeDNSPolicy" },
+    user_defaults: {
+      type: "array",
+      items: { $ref: "#/definitions/config.NodeUserDefault" },
+    },
+    rules: { type: "array", items: { $ref: "#/definitions/config.NodeRoute" } },
+    outbounds: {
+      type: "array",
+      items: { $ref: "#/definitions/config.NodeOutbound" },
+    },
+  });
+  expect(spec.definitions["dto.NodeRoutingPolicy"]!.properties).toMatchObject({
+    dns_policy: { $ref: "#/definitions/config.NodeDNSPolicy" },
+    user_defaults: {
+      type: "array",
+      items: { $ref: "#/definitions/config.NodeUserDefault" },
+    },
+    rules: {
+      type: "array",
+      items: { $ref: "#/definitions/dto.NodeRoutingRule" },
+    },
+    outbounds: {
+      type: "array",
+      items: { $ref: "#/definitions/dto.NodeOutbound" },
+    },
+  });
+  expect(
+    spec.definitions["config.NodeDNSPolicy"]!.properties.resolvers
+  ).toEqual({
+    type: "array",
+    items: { $ref: "#/definitions/config.NodeDNSResolver" },
+  });
+  expect(spec.definitions["dto.RoutingStatusReport"]!.properties).toMatchObject(
+    {
+      routing_applied: { $ref: "#/definitions/dto.RoutingCandidateIdentity" },
+      routing_pending: { $ref: "#/definitions/dto.RoutingCandidateIdentity" },
+      routing_error: { $ref: "#/definitions/dto.RoutingReportError" },
+    }
+  );
+  expect(
+    spec.definitions["dto.RoutingReportError"]!.properties.identity
+  ).toEqual({ $ref: "#/definitions/dto.RoutingCandidateIdentity" });
+  for (const name of ["config.NodeRoute", "dto.NodeRoutingRule"])
+    expect(spec.definitions[name]!.properties.user_ids).toEqual({
+      type: "array",
+      items: { type: "integer" },
+    });
+  for (const name of ["config.NodeOutbound", "dto.NodeOutbound"])
+    expect(spec.definitions[name]!.properties.via_outbound_id).toEqual({
+      type: "string",
+    });
+  expect(
+    spec.definitions["config.NodeDNSResolver"]!.properties.bootstrap_ip
+  ).toEqual({ type: "string" });
+  expect(
+    spec.definitions["dto.RoutingCandidateIdentity"]!.properties.snapshot_id
+  ).toEqual({ type: "string" });
+  expect(
+    spec.definitions["dto.GetServerNodeConfigResponse"]!.properties
+      .desired_snapshot_id
+  ).toEqual({ type: "string" });
+  for (const name of ["dto.NodeConfig", "dto.UpdateServerNodeConfigRequest"]) {
+    expect(spec.definitions[name]!.properties.routing_downgrade).toEqual({
+      type: "boolean",
+    });
+    expect(spec.definitions[name]!.required || []).not.toContain(
+      "routing_downgrade"
+    );
+  }
   expect(keys("dto.CreateServerResponse")).toEqual(["id"]);
-  expect(keys("dto.RoutingStatusReport")).toContain("routing_sequence");
-  expect(keys("dto.RoutingStatusReport")).toContain("liveness_at");
   expect(spec.paths["/v1/admin/system/node_config/preview"]).toBeUndefined();
   expect(spec.paths["/v1/admin/server/node_config/preview"]).toBeUndefined();
 });

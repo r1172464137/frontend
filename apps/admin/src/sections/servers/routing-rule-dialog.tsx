@@ -14,6 +14,7 @@ import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SingleRouteMatchEditor } from "./route-rule-editor";
 import { canonicalizeRouteRules, validateRouteRules } from "./route-rules";
+import { RoutingUsers } from "./routing-users";
 
 export function RoutingRuleDialog({
   rule,
@@ -104,6 +105,19 @@ export function RoutingRuleDialog({
                 {t("ordered_routing.protocol", "Protocol")}
               </option>
             </select>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("ordered_routing.user_scope", "Account scope")}</Label>
+            <p className="text-muted-foreground text-sm">
+              {t(
+                "ordered_routing.scope_and",
+                "The selected accounts and the destination must both match."
+              )}
+            </p>
+            <RoutingUsers
+              value={draft.user_ids || []}
+              onChange={(user_ids) => setDraft({ ...draft, user_ids })}
+            />
           </div>
           <SingleRouteMatchEditor
             key={draft.kind}

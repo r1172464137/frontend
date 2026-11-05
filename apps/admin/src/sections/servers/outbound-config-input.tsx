@@ -466,7 +466,7 @@ export function OutboundConfigInput({
         <legend className="ml-3 bg-background px-1 py-1 font-medium text-foreground text-sm">
           {t(group.labelKey, group.fallback)}
         </legend>
-        <div className="grid grid-cols-2 gap-4 p-4 pt-2">
+        <div className="grid grid-cols-1 gap-4 p-4 pt-2 sm:grid-cols-2">
           {visibleFields.map((field) => renderField(item, index, field))}
         </div>
       </fieldset>
@@ -523,6 +523,51 @@ export function OutboundConfigInput({
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pt-0 pb-4">
                   <div className="-mx-4 space-y-4 rounded-b-lg border-t px-4 pt-4">
+                    <label className="block space-y-2 text-sm">
+                      <span>
+                        {t("ordered_routing.via", "Connect through outbound")}
+                      </span>
+                      <select
+                        aria-label={t(
+                          "ordered_routing.via",
+                          "Connect through outbound"
+                        )}
+                        className="h-9 w-full rounded-md border bg-background px-3"
+                        value={item.via_outbound_id || ""}
+                        onChange={(event) =>
+                          emit(
+                            items.map((candidate, i) =>
+                              i === index
+                                ? {
+                                    ...candidate,
+                                    via_outbound_id: event.target.value,
+                                  }
+                                : candidate
+                            )
+                          )
+                        }
+                      >
+                        <option value="">
+                          {t(
+                            "ordered_routing.no_via",
+                            "Original connection (no front hop)"
+                          )}
+                        </option>
+                        {items
+                          .filter((candidate) => candidate.id !== item.id)
+                          .map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {candidate.name || candidate.id}
+                            </option>
+                          ))}
+                      </select>
+                      <span className="block text-muted-foreground">
+                        {t(
+                          "ordered_routing.via_hint",
+                          "Traffic connects through the selected outbound, then this outbound. Unsupported combinations are rejected by the server; no automatic fallback."
+                        )}
+                      </span>
+                    </label>
                     {FIELD_GROUPS.map((group) =>
                       renderGroup(item, index, group)
                     )}

@@ -67,6 +67,7 @@ import {
   validateNodeRouting,
 } from "./node-routing";
 import { NodeRoutingEditor } from "./node-routing-editor";
+import { RoutingDNS } from "./routing-dns";
 import { RoutingConflict } from "./routing-status";
 
 const dnsConfigSchema = z.object({
@@ -170,16 +171,20 @@ export default function ServerConfig() {
 
   const validConfig = Boolean(
     cfgResp &&
-      cfgResp.routing_mode === "global-v1" &&
+      ["global-v1", "global-v2"].includes(cfgResp.routing_mode) &&
       isRoutingRevision(cfgResp.routing_revision) &&
       cfgResp.routing_revision > 0 &&
       routing
   );
 
+  const explicitDNS = Boolean(routing?.dns_policy);
+  const hiddenDNSDraft = explicitDNS && Boolean(dirtyFields.dns);
+
   async function onSubmit(values: NodeConfigFormData) {
     if (
       conflict ||
       !validConfig ||
+      hiddenDNSDraft ||
       !(isDirty || routingDirty) ||
       (routingDirty && (!routing || validateNodeRouting(routing).length))
     )
@@ -206,9 +211,7 @@ export default function ServerConfig() {
         return;
       }
     }
-    const payload: API.UpdateNodeConfigRequest = {
-      routing_revision: cfgResp!.routing_revision,
-    };
+    const payload: API.UpdateNodeConfigRequest = {};
     if (dirtyFields.node_secret) payload.node_secret = values.node_secret ?? "";
     if (dirtyFields.node_pull_interval)
       payload.node_pull_interval = values.node_pull_interval;
@@ -218,7 +221,10 @@ export default function ServerConfig() {
       payload.traffic_report_threshold = values.traffic_report_threshold;
     if (dirtyFields.ip_strategy) payload.ip_strategy = values.ip_strategy ?? "";
     if (dirtyFields.dns) payload.dns = dnsForWrite(values.dns || []);
-    if (routingDirty) payload.routing = routing;
+    if (routingDirty) {
+      payload.routing = routing;
+      payload.routing_revision = cfgResp!.routing_revision;
+    }
     const revision = cfgResp!.routing_revision;
     holdDraft.current = true;
     setSaveError(undefined);
@@ -263,7 +269,14 @@ export default function ServerConfig() {
       await readBack(false);
     } catch (error) {
       const message = safeBackendError(error);
-      if (message) setSaveError(message);
+      if (message || isDefiniteRejection(error))
+        setSaveError(
+          message ||
+            t(
+              "ordered_routing.save_error",
+              "Save failed. Refresh to verify the current state before retrying."
+            )
+        );
       if (isRoutingConflict(error)) setConflict(true);
       else if (isDefiniteRejection(error))
         toast.error(
@@ -283,7 +296,8 @@ export default function ServerConfig() {
     <Sheet
       onOpenChange={(nextOpen) => {
         if (!nextOpen && saving) return;
-        if (nextOpen && queryConfig && !conflict) {
+        if (!nextOpen && !saveError && !conflict) holdDraft.current = false;
+        if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
           holdDraft.current = false;
           resetConfig(queryConfig);
         }
@@ -657,37 +671,54 @@ export default function ServerConfig() {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="dns"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t(
-                              "server_config.fields.dns_config",
-                              "DNS Configuration"
-                            )}
-                          </FormLabel>
-                          <DNSEditor
-                            onChange={(values) => {
-                              holdDraft.current = true;
-                              form.clearErrors("dns");
-                              field.onChange(values);
-                            }}
-                            value={field.value || []}
-                          />
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {hiddenDNSDraft && (
+                      <p className="text-destructive text-sm" role="alert">
+                        {t(
+                          "ordered_routing.legacy_dns_draft",
+                          "Legacy DNS has unsaved changes. Return to legacy DNS mode to save or revert them first."
+                        )}
+                      </p>
+                    )}
+                    {!explicitDNS && (
+                      <FormField
+                        control={form.control}
+                        name="dns"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t(
+                                "server_config.fields.dns_config",
+                                "DNS Configuration"
+                              )}
+                            </FormLabel>
+                            <DNSEditor
+                              onChange={(values) => {
+                                holdDraft.current = true;
+                                form.clearErrors("dns");
+                                field.onChange(values);
+                              }}
+                              value={field.value || []}
+                            />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    {validConfig && routing && (
+                      <RoutingDNS
+                        value={routing}
+                        onChange={(next) => {
+                          holdDraft.current = true;
+                          setRouting(next);
+                          setRoutingDirty(true);
+                        }}
+                      />
+                    )}
                   </TabsContent>
 
                   <TabsContent className="space-y-4" value="routing">
                     <p className="text-sm">
-                      {t(
-                        "ordered_routing.global_v1",
-                        "Global ordered routing v1"
-                      )}
+                      {t("ordered_routing.global_v1", "Global ordered routing")}
                     </p>
                     <p className="text-muted-foreground text-sm">
                       {t(
@@ -726,7 +757,10 @@ export default function ServerConfig() {
         <SheetFooter className="flex-row justify-end gap-2 pt-3">
           <Button
             disabled={saving}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              if (!saveError && !conflict) holdDraft.current = false;
+              setOpen(false);
+            }}
             variant="outline"
           >
             {t("actions.cancel", "Cancel")}
@@ -738,6 +772,7 @@ export default function ServerConfig() {
               isError ||
               isLoading ||
               !validConfig ||
+              hiddenDNSDraft ||
               !(isDirty || routingDirty) ||
               (routingDirty &&
                 (!routing || validateNodeRouting(routing).length > 0))

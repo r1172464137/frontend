@@ -126,6 +126,19 @@ afterEach(() => {
 
 describe("server node configuration", () => {
   it("shows inherited values and only enables save after an override changes", async () => {
+    mocks.refetch.mockResolvedValue({
+      data: {
+        serverId: server.id,
+        config: {
+          ...config,
+          override: {
+            ...config.override,
+            inherit_ip_strategy: false,
+            ip_strategy: "prefer_ipv6",
+          },
+        },
+      },
+    });
     render(<ServerNodeConfig server={server} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Node Config" }));
@@ -151,7 +164,6 @@ describe("server node configuration", () => {
         expect.objectContaining({
           inherit_ip_strategy: false,
           ip_strategy: "prefer_ipv6",
-          routing_revision: 0,
           server_id: 7,
         }),
         { skipErrorHandler: true }
@@ -163,6 +175,7 @@ describe("server node configuration", () => {
     >;
     for (const field of [
       "routing",
+      "routing_revision",
       "inherit_routing",
       "block",
       "outbound",
@@ -170,6 +183,18 @@ describe("server node configuration", () => {
       "inherit_outbound",
     ])
       expect(Object.hasOwn(payload, field)).toBe(false);
+    await waitFor(() => expect(mocks.refetch).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("No unsaved changes")).toBeTruthy();
+    expect(
+      screen
+        .getByRole("switch", { name: "Use global IP strategy" })
+        .getAttribute("data-state")
+    ).toBe("unchecked");
+    expect(
+      screen
+        .getByRole("switch", { name: "Use global DNS configuration" })
+        .getAttribute("data-state")
+    ).toBe("checked");
   });
 
   it("retains the real DNS override editor and sends only non-routing fields", async () => {
@@ -191,7 +216,6 @@ describe("server node configuration", () => {
       .calls[0]![0] as API.UpdateServerNodeConfigRequest;
     expect(payload).toMatchObject({
       inherit_dns: false,
-      routing_revision: 0,
       dns: [
         {
           proto: "udp",
@@ -202,6 +226,7 @@ describe("server node configuration", () => {
       ],
     });
     expect(Object.hasOwn(payload, "routing")).toBe(false);
+    expect(Object.hasOwn(payload, "routing_revision")).toBe(false);
     // The fixture readback intentionally ignores the write; do not report success.
     expect(await screen.findByText(/readback did not confirm it/)).toBeTruthy();
   });

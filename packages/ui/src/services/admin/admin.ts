@@ -1746,6 +1746,37 @@ export async function getSystemGetNodeMultiplier(options?: {
   );
 }
 
+/** Get Interface Config GET /v1/admin/system/interface_config */
+export async function getSystemInterfaceConfig(options?: {
+  [key: string]: any;
+}) {
+  return request<API.ResponseSuccessBean & { data?: API.InterfaceConfig }>(
+    `${import.meta.env.VITE_API_PREFIX || ""}/v1/admin/system/interface_config`,
+    {
+      method: "GET",
+      ...(options || {}),
+    }
+  );
+}
+
+/** Update Interface Config PUT /v1/admin/system/interface_config */
+export async function putSystemInterfaceConfig(
+  body: API.InterfaceConfig,
+  options?: { [key: string]: any }
+) {
+  return request<API.ResponseSuccessBean>(
+    `${import.meta.env.VITE_API_PREFIX || ""}/v1/admin/system/interface_config`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: body,
+      ...(options || {}),
+    }
+  );
+}
+
 /** Get invite config GET /v1/admin/system/invite_config */
 export async function getSystemInviteConfig(options?: { [key: string]: any }) {
   return request<API.ResponseSuccessBean & { data?: API.InviteConfig }>(

@@ -43,11 +43,15 @@ export function RoutingStatus({
   expected,
   onRefresh,
   refreshDisabled = false,
+  version = 1,
+  desiredSnapshotID,
 }: {
   status?: API.RoutingStatusView;
   expected?: API.RoutingIdentity;
   onRefresh: () => void;
   refreshDisabled?: boolean;
+  version?: 1 | 2;
+  desiredSnapshotID?: string | null;
 }) {
   const { t } = useTranslation("servers");
   const [clock, setClock] = useState(Date.now);
@@ -63,9 +67,16 @@ export function RoutingStatus({
     return () => window.clearTimeout(timer);
   }, [received]);
   const state = routingApplicationState(
-    status,
+    status && {
+      ...status,
+      desired_snapshot_id:
+        desiredSnapshotID !== undefined
+          ? desiredSnapshotID
+          : status.desired_snapshot_id,
+    },
     expected,
-    Math.max(clock, Date.now())
+    Math.max(clock, Date.now()),
+    version
   );
   const fallback = {
     pending: "Pending node application",

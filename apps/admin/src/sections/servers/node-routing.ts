@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canonicalDNSAddress } from "./dns-config";
 import { validateOutboundCapability } from "./outbound-capability";
 import { outboundConnectionSchema } from "./outbound-config";
 import {
@@ -15,6 +16,7 @@ const ruleID = new RegExp(`^rr_${uuid}$`);
 
 export const routingOutboundSchema = outboundConnectionSchema.extend({
   id: z.string().regex(outboundID),
+  via_outbound_id: z.string().optional(),
 });
 export const routingRuleSchema = z.looseObject({
   id: z.string().regex(ruleID),
@@ -23,12 +25,36 @@ export const routingRuleSchema = z.looseObject({
   kind: z.enum(["domain", "ip", "protocol"]),
   values: z.array(z.string()),
   outbound_id: z.string(),
+  user_ids: z.array(z.number().int().positive().safe()).optional(),
 });
 export const nodeRoutingSchema = z.looseObject({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   outbounds: z.array(routingOutboundSchema),
   rules: z.array(routingRuleSchema),
   default_outbound_id: z.string(),
+  user_defaults: z
+    .array(
+      z.looseObject({
+        user_id: z.number().int().positive().safe(),
+        outbound_id: z.string(),
+      })
+    )
+    .optional(),
+  dns_policy: z
+    .looseObject({
+      query_strategy: z.enum(["UseIP", "UseIPv4", "UseIPv6"]),
+      resolvers: z.array(
+        z.looseObject({
+          id: z.string().regex(new RegExp(`^dns_${uuid}$`)),
+          protocol: z.enum(["udp", "tcp", "https"]),
+          address: z.string(),
+          domains: z.array(z.string()),
+          outbound_id: z.string(),
+          bootstrap_ip: z.string().optional(),
+        })
+      ),
+    })
+    .optional(),
 });
 
 export type RoutingIssue = { code: string; path: string };
@@ -48,6 +74,7 @@ export function routingContentFromProjection(
     "source_server_id",
     "source_revision",
     "local_transition_revision",
+    "snapshot_id",
   ]) {
     Reflect.deleteProperty(content, field);
   }
@@ -66,6 +93,38 @@ export function routingIdentityFromProjection(
   });
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
+}
+
+function rawFrontHop(outbound: API.NodeRoutingOutbound): {
+  tag?: string;
+  invalid?: boolean;
+} {
+  if (!outbound.stream_settings) return {};
+  try {
+    const stream: unknown = JSON.parse(outbound.stream_settings);
+    if (!stream || typeof stream !== "object" || Array.isArray(stream))
+      return {};
+    const sockopt = Object.entries(stream).find(
+      ([key]) => key.toLowerCase() === "sockopt"
+    )?.[1];
+    if (sockopt == null) return {};
+    if (typeof sockopt !== "object" || Array.isArray(sockopt))
+      return { invalid: true };
+    const tag = Object.entries(sockopt).find(
+      ([key]) => key.toLowerCase() === "dialerproxy"
+    )?.[1];
+    if (tag == null || tag === "") return {};
+    return typeof tag === "string" ? { tag } : { invalid: true };
+  } catch {
+    return {};
+  }
+}
+
+function rawFrontHopTarget(
+  outbound: API.NodeRoutingOutbound
+): string | undefined {
+  const { tag } = rawFrontHop(outbound);
+  return tag?.startsWith("routing_") ? tag.slice("routing_".length) : undefined;
 }
 
 /** Validate without transforming: neither presence nor connection fields change. */
@@ -121,6 +180,82 @@ export function validateNodeRouting(value: unknown): RoutingIssue[] {
   });
   if (!ids.has(routing.default_outbound_id))
     add("unknownOutbound", "default_outbound_id");
+  if (routing.version === 2 && !routing.user_defaults)
+    add("invalidShape", "user_defaults");
+  const custom = new Map(
+    routing.outbounds.map((outbound) => [outbound.id, outbound])
+  );
+  const links = new Map<string, string>();
+  for (const outbound of routing.outbounds) {
+    const raw =
+      routing.version === 2
+        ? rawFrontHop(outbound as API.NodeRoutingOutbound)
+        : {};
+    const rawTarget = raw.tag?.startsWith("routing_")
+      ? raw.tag.slice("routing_".length)
+      : undefined;
+    if (raw.invalid)
+      add("invalidRawSettings", `outbounds.${outbound.id}.stream_settings`);
+    if (raw.tag && outbound.via_outbound_id)
+      add("chainConflict", `outbounds.${outbound.id}`);
+    if (
+      raw.tag &&
+      raw.tag !== "Default" &&
+      raw.tag !== "block" &&
+      (!rawTarget || !custom.has(rawTarget))
+    )
+      add("unknownOutbound", `outbounds.${outbound.id}.stream_settings`);
+    links.set(
+      outbound.id,
+      outbound.via_outbound_id ||
+        (rawTarget && custom.has(rawTarget) ? rawTarget : "")
+    );
+  }
+  for (const outbound of routing.outbounds) {
+    const seen = new Set<string>();
+    let current: typeof outbound | undefined = outbound;
+    while (current && links.get(current.id)) {
+      if (seen.has(current.id)) {
+        add("chainCycle", `outbounds.${outbound.id}`);
+        break;
+      }
+      seen.add(current.id);
+      const next = custom.get(links.get(current.id)!);
+      if (!next) {
+        add("unknownOutbound", `outbounds.${outbound.id}`);
+        break;
+      }
+      current = next;
+    }
+  }
+  const users = new Set<number>();
+  for (const entry of routing.user_defaults || []) {
+    if (users.has(entry.user_id)) add("duplicateUser", "user_defaults");
+    users.add(entry.user_id);
+    if (!ids.has(entry.outbound_id)) add("unknownOutbound", "user_defaults");
+  }
+  const resolvers = routing.dns_policy?.resolvers;
+  if (resolvers) {
+    if (!resolvers.length || resolvers.length > 128)
+      add("invalidDNS", "dns_policy.resolvers");
+    const dnsIDs = new Set<string>();
+    resolvers.forEach((resolver, index) => {
+      const path = `dns_policy.resolvers.${index + 1}`;
+      if (dnsIDs.has(resolver.id)) add("duplicateId", path);
+      dnsIDs.add(resolver.id);
+      if (
+        !resolver.address.trim() ||
+        (index === resolvers.length - 1
+          ? resolver.domains.length !== 0
+          : resolver.domains.length === 0) ||
+        resolver.domains.length > 1024 ||
+        validateRouteRules("domain", resolver.domains).length
+      )
+        add("invalidDNS", path);
+      if (!ids.has(resolver.outbound_id) || resolver.outbound_id === "block")
+        add("unknownOutbound", path);
+    });
+  }
   const ruleIDs = new Set<string>();
   let inputValues = 0;
   let canonicalValues = 0;
@@ -132,6 +267,8 @@ export function validateNodeRouting(value: unknown): RoutingIssue[] {
     if ([...rule.remark].length > 200 || /\p{Cc}/u.test(rule.remark))
       add("invalidRemark", path);
     if (!ids.has(rule.outbound_id)) add("unknownOutbound", path);
+    if (rule.user_ids && new Set(rule.user_ids).size !== rule.user_ids.length)
+      add("duplicateUser", path);
     if (rule.values.length > 1024) add("tooManyValues", path);
     inputValues += rule.values.length;
     const values = canonicalizeRouteRules(rule.kind, rule.values);
@@ -141,6 +278,12 @@ export function validateNodeRouting(value: unknown): RoutingIssue[] {
     for (const issue of validateRouteRules(rule.kind, rule.values))
       add(issue.code, path);
   });
+  for (const resolver of resolvers || []) {
+    inputValues += resolver.domains.length;
+    const values = canonicalizeRouteRules("domain", resolver.domains);
+    canonicalValues += values.length;
+    matchBytes += values.reduce((sum, item) => sum + utf8ByteLength(item), 0);
+  }
   if (inputValues > 8192 || canonicalValues > 8192)
     add("aggregateValues", "rules");
   if (matchBytes > 256 * 1024) add("aggregateBytes", "rules");
@@ -153,7 +296,7 @@ export function validateNodeRouting(value: unknown): RoutingIssue[] {
   return issues;
 }
 
-export function newRoutingID(prefix: "ob" | "rr") {
+export function newRoutingID(prefix: "ob" | "rr" | "dns") {
   // randomUUID is unavailable on some HTTP admin origins; getRandomValues is
   // still available there. Never fall back to a predictable ID.
   if (typeof crypto.randomUUID === "function")
@@ -205,6 +348,7 @@ const omittedConnectionFields = new Set([
   "spider_x",
   "settings",
   "stream_settings",
+  "via_outbound_id",
 ]);
 
 function canonicalConnection(outbound: API.NodeRoutingOutbound) {
@@ -259,10 +403,48 @@ export function routingReadbackMatches(
   const canonical = (policy: API.NodeRouting) => ({
     ...policy,
     outbounds: policy.outbounds.map(canonicalConnection),
-    rules: policy.rules.map((rule) => ({
-      ...rule,
-      values: canonicalizeRouteRules(rule.kind, rule.values),
-    })),
+    rules: policy.rules.map((rule) => {
+      const result = {
+        ...rule,
+        values: canonicalizeRouteRules(rule.kind, rule.values),
+      };
+      if (!result.user_ids?.length) delete result.user_ids;
+      else
+        result.user_ids = [...new Set(result.user_ids)].sort((a, b) => a - b);
+      return result;
+    }),
+    ...(policy.user_defaults
+      ? {
+          user_defaults: [...policy.user_defaults].sort(
+            (a, b) => a.user_id - b.user_id
+          ),
+        }
+      : {}),
+    ...(policy.dns_policy
+      ? {
+          dns_policy: {
+            ...policy.dns_policy,
+            resolvers: policy.dns_policy.resolvers.map((resolver) => {
+              const result = {
+                ...resolver,
+                domains: canonicalizeRouteRules("domain", resolver.domains),
+              };
+              if (
+                resolver.protocol !== "https" &&
+                resolver.address === resolver.address.trim()
+              )
+                result.address =
+                  canonicalDNSAddress(resolver.address) ?? resolver.address;
+              if (!result.bootstrap_ip) delete result.bootstrap_ip;
+              else if (z.ipv6().safeParse(result.bootstrap_ip).success)
+                result.bootstrap_ip =
+                  canonicalDNSAddress(result.bootstrap_ip) ??
+                  result.bootstrap_ip;
+              return result;
+            }),
+          },
+        }
+      : {}),
   });
   try {
     return sortedJSON(canonical(expected)) === sortedJSON(canonical(actual));
@@ -275,6 +457,16 @@ export function outboundReferences(routing: API.NodeRouting, id: string) {
   return {
     isDefault: routing.default_outbound_id === id,
     rules: routing.rules.filter((rule) => rule.outbound_id === id),
+    chains: routing.outbounds.filter(
+      (outbound) =>
+        outbound.via_outbound_id === id || rawFrontHopTarget(outbound) === id
+    ),
+    users: (routing.user_defaults || []).filter(
+      (entry) => entry.outbound_id === id
+    ),
+    resolvers: (routing.dns_policy?.resolvers || []).filter(
+      (entry) => entry.outbound_id === id
+    ),
   };
 }
 
@@ -322,13 +514,13 @@ function validIdentity(a?: API.RoutingIdentity) {
     !isRoutingRevision(a.source_server_id)
   )
     return false;
-  if (a.mode === "ordered-v1-local")
+  if (a.mode === "ordered-v1-local" || a.mode === "ordered-v2-local")
     return (
       a.source === "server" &&
       a.source_server_id > 0 &&
       a.source_revision === a.local_transition_revision
     );
-  if (a.mode === "ordered-v1-inherited")
+  if (a.mode === "ordered-v1-inherited" || a.mode === "ordered-v2-inherited")
     return a.source === "global" && a.source_server_id === 0;
   return false;
 }
@@ -354,7 +546,8 @@ export const ROUTING_STATUS_TTL_MS = 3 * 60 * 1000;
 export function routingApplicationState(
   status?: API.RoutingStatusView,
   expected?: API.RoutingIdentity,
-  now = Date.now()
+  now = Date.now(),
+  version: 1 | 2 = 1
 ) {
   const report = status?.report;
   if (
@@ -370,8 +563,16 @@ export function routingApplicationState(
     !sameIdentity(expected, expected)
   )
     return "unknown";
-  if (sameIdentity(report.routing_error?.identity, expected)) return "failed";
-  if (sameIdentity(report.routing_pending, expected)) return "pending";
-  if (sameIdentity(report.routing_applied, expected)) return "applied";
+  const matches = (identity?: API.RoutingIdentity) =>
+    sameIdentity(identity, expected) &&
+    (version === 1 ||
+      (report.routing_version === 2 &&
+        Boolean(
+          status.desired_snapshot_id &&
+            identity?.snapshot_id === status.desired_snapshot_id
+        )));
+  if (matches(report.routing_error?.identity)) return "failed";
+  if (matches(report.routing_pending)) return "pending";
+  if (matches(report.routing_applied)) return "applied";
   return "unknown";
 }

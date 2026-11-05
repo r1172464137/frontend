@@ -96,6 +96,81 @@ describe("presence-sensitive node settings readback", () => {
       )
     ).toBe(false);
   });
+  it("confirms a v2 save when backend sorts account selectors and normalizes DNS", () => {
+    const desired: API.NodeRouting = {
+      ...routing,
+      version: 2,
+      rules: [
+        {
+          id: "rr_22222222-2222-4222-8222-222222222222",
+          enabled: true,
+          remark: "",
+          kind: "domain",
+          values: ["domain:example.com"],
+          user_ids: [21, 1],
+          outbound_id: "direct",
+        },
+      ],
+      user_defaults: [
+        { user_id: 21, outbound_id: "block" },
+        { user_id: 1, outbound_id: "direct" },
+      ],
+      dns_policy: {
+        query_strategy: "UseIP",
+        resolvers: [
+          {
+            id: "dns_44444444-4444-4444-8444-444444444444",
+            protocol: "udp",
+            address: "DNS.Example.COM.:0053",
+            bootstrap_ip: "2001:0db8:0:0:0:0:0:1",
+            domains: [],
+            outbound_id: "direct",
+          },
+        ],
+      },
+    };
+    const observed = structuredClone(desired);
+    observed.rules[0]!.user_ids = [1, 21];
+    observed.user_defaults!.reverse();
+    observed.dns_policy!.resolvers[0]!.address = "dns.example.com.:53";
+    observed.dns_policy!.resolvers[0]!.bootstrap_ip = "2001:db8::1";
+    expect(
+      globalWriteMatches(
+        { routing: desired, routing_revision: 3 },
+        { ...global, routing: observed, routing_revision: 4 },
+        3
+      )
+    ).toBe(true);
+    const response: API.GetServerNodeConfigResponse = {
+      ...server,
+      override: {
+        ...server.override,
+        inherit_routing: false,
+        routing: observed,
+        routing_revision: 1,
+      },
+    };
+    expect(
+      serverWriteMatches(
+        { server_id: 7, routing: desired, routing_revision: 0 },
+        response,
+        0
+      )
+    ).toBe(true);
+    const different = structuredClone(response);
+    different.override.routing!.user_defaults![0]!.outbound_id = "block";
+    expect(
+      serverWriteMatches(
+        { server_id: 7, routing: desired, routing_revision: 0 },
+        different,
+        0
+      )
+    ).toBe(false);
+    expect(desired.rules[0]!.user_ids).toEqual([21, 1]);
+    expect(desired.user_defaults!.map((entry) => entry.user_id)).toEqual([
+      21, 1,
+    ]);
+  });
   it("mirrors server DNS normalization but rejects meaningful readback differences", () => {
     const payload: API.UpdateServerNodeConfigRequest = {
       server_id: 7,

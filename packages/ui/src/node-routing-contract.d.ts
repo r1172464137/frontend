@@ -11,19 +11,34 @@ declare global {
       kind: "domain" | "ip" | "protocol";
       values: string[];
       outbound_id: string;
+      user_ids?: number[];
       [field: string]: unknown;
     };
     type NodeRoutingOutbound = Omit<NodeOutbound, "rules" | "plugin_opts"> & {
       id: string;
       rules?: string[];
       plugin_opts?: unknown;
+      via_outbound_id?: string;
       [field: string]: unknown;
     };
+    type RoutingDNSResolver = {
+      id: string;
+      protocol: "udp" | "tcp" | "https";
+      address: string;
+      domains: string[];
+      outbound_id: string;
+      bootstrap_ip?: string;
+    };
     type NodeRouting = {
-      version: 1;
+      version: 1 | 2;
       outbounds: NodeRoutingOutbound[];
       rules: NodeRouteRule[];
       default_outbound_id: string;
+      user_defaults?: { user_id: number; outbound_id: string }[];
+      dns_policy?: {
+        query_strategy: "UseIP" | "UseIPv4" | "UseIPv6";
+        resolvers: RoutingDNSResolver[];
+      };
       [field: string]: unknown;
     };
     type RoutingIdentity = {
@@ -32,11 +47,13 @@ declare global {
       source_server_id: number;
       source_revision: number;
       local_transition_revision: number;
+      snapshot_id?: string;
     };
     type NodeRoutingProjection = NodeRouting & RoutingIdentity;
     type RoutingStatusView = {
       known: boolean;
       reporter_verified: boolean;
+      desired_snapshot_id?: string | null;
       report?: {
         routing_version: number;
         routing_sequence?: number;
@@ -69,6 +86,7 @@ declare global {
     type UpdateNodeConfigRequest = {
       routing?: NodeRouting;
       routing_revision?: number;
+      routing_downgrade?: boolean;
       dns?: NodeDNS[];
       ip_strategy?: string;
       node_pull_interval?: number;
@@ -97,6 +115,7 @@ declare global {
       global: ServerNodeConfigValues;
       override: ServerNodeConfigOverride;
       routing_status: RoutingStatusView;
+      desired_snapshot_id?: string | null;
     };
     type UpdateServerNodeConfigRequest = {
       dns?: NodeDNS[];
@@ -106,6 +125,7 @@ declare global {
       ip_strategy?: string;
       routing?: NodeRouting;
       routing_revision?: number;
+      routing_downgrade?: boolean;
       server_id: number;
     };
   }

@@ -14,9 +14,9 @@ export function safeBackendError(error: unknown): string | undefined {
     }
   ).response?.data;
   if (
-    ![400, 140_001, 140_002, 140_003, 160_001, 160_003].includes(
-      Number(body?.code)
-    )
+    ![
+      400, 140_001, 140_002, 140_003, 140_005, 160_001, 160_003, 160_004,
+    ].includes(Number(body?.code))
   )
     return;
   const value = typeof body?.msg === "string" ? body.msg : body?.message;
