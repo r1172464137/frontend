@@ -84,7 +84,7 @@ describe("system version card", () => {
     });
     expect(request).toHaveBeenLastCalledWith(
       "/v1/admin/tool/restart",
-      expect.objectContaining({ method: "GET" })
+      expect.objectContaining({ method: "POST" })
     );
   });
 });

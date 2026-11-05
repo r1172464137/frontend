@@ -630,6 +630,23 @@ export async function getDocumentList(
   });
 }
 
+/** Filter admin action log Pages the administrators' audit trail: settings changes, marketing tasks, ticket actions and Telegram bot commands, with the acting administrator and the request they came from. GET /v1/admin/log/admin/list */
+export async function getLogAdminList(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getLogAdminListParams,
+  options?: { [key: string]: any }
+) {
+  return request<
+    API.ResponseSuccessBean & { data?: API.FilterAdminActionLogResponse }
+  >(`${import.meta.env.VITE_API_PREFIX || ""}/v1/admin/log/admin/list`, {
+    method: "GET",
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
 /** Filter balance log GET /v1/admin/log/balance/list */
 export async function getLogBalanceList(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
@@ -764,6 +781,28 @@ export async function getLogOrderList(
     },
     ...(options || {}),
   });
+}
+
+/** Filter unmatched payment log Pages the payments a gateway confirmed that could not settle their order, with the order and trade numbers, the amount and the reason, for manual refunds. GET /v1/admin/log/payment/unmatched/list */
+export async function getLogPaymentUnmatchedList(
+  // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
+  params: API.getLogPaymentUnmatchedListParams,
+  options?: { [key: string]: any }
+) {
+  return request<
+    API.ResponseSuccessBean & { data?: API.FilterUnmatchedPaymentLogResponse }
+  >(
+    `${
+      import.meta.env.VITE_API_PREFIX || ""
+    }/v1/admin/log/payment/unmatched/list`,
+    {
+      method: "GET",
+      params: {
+        ...params,
+      },
+      ...(options || {}),
+    }
+  );
 }
 
 /** Filter register log GET /v1/admin/log/register/list */
@@ -2199,12 +2238,12 @@ export async function getToolLog(options?: { [key: string]: any }) {
   );
 }
 
-/** Restart System GET /v1/admin/tool/restart */
-export async function getToolRestart(options?: { [key: string]: any }) {
+/** Restart System POST /v1/admin/tool/restart */
+export async function postToolRestart(options?: { [key: string]: any }) {
   return request<API.ResponseSuccessBean>(
     `${import.meta.env.VITE_API_PREFIX || ""}/v1/admin/tool/restart`,
     {
-      method: "GET",
+      method: "POST",
       ...(options || {}),
     }
   );

@@ -22,7 +22,7 @@ import {
 import { Icon } from "@workspace/ui/composed/icon";
 import {
   getToolVersion as getServerVersion,
-  getToolRestart as restartSystem,
+  postToolRestart as restartSystem,
 } from "@workspace/ui/services/admin/admin";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

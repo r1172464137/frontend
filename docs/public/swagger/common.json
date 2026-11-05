@@ -17,6 +17,61 @@
         "version": "1.0"
     },
     "paths": {
+        "/healthz": {
+            "get": {
+                "description": "Reports that the process serves HTTP. It answers 200 whenever the listener is up, regardless of the database and Redis; use /readyz for those.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "common"
+                ],
+                "summary": "Liveness probe",
+                "responses": {
+                    "200": {
+                        "description": "status ok",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/readyz": {
+            "get": {
+                "description": "Reports whether the server can serve requests: the runtime bootstrap has loaded the settings and the database and Redis answer a ping (the ping result is cached for a few seconds). Otherwise it answers 503 with the reason.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "common"
+                ],
+                "summary": "Readiness probe",
+                "responses": {
+                    "200": {
+                        "description": "status ok",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "status unavailable with a reason",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/check": {
             "get": {
                 "consumes": [
@@ -288,6 +343,7 @@
         },
         "/v1/auth/oauth/login": {
             "post": {
+                "description": "Starts a sign-in through the provider and answers with its authorization URL. The optional nonce, a random value the client keeps for this sign-in, must be sent again to /v1/auth/oauth/login/token, which then completes only the sign-in this client started. Methods that redirect the browser to the given redirect (apple, telegram) require it to stay on the configured site host, or on the host this request was made to while no site host is configured.",
                 "consumes": [
                     "application/json"
                 ],
@@ -333,6 +389,7 @@
         },
         "/v1/auth/oauth/login/token": {
             "post": {
+                "description": "Completes a sign-in with the provider's callback and answers with the session token. A sign-in started with a nonce (/v1/auth/oauth/login) is completed only with the same nonce; one started without is completed only without.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1535,6 +1592,13 @@
         "dto.LoginResponse": {
             "type": "object",
             "properties": {
+                "third_party_bindings": {
+                    "description": "ThirdPartyBindings lists the types of the third-party sign-in methods\n(OAuth providers, Telegram) still bound to the account after a\npassword reset, so the client can show them: a binding made during a\ncompromise keeps signing in until its owner removes it. Empty for\nevery other sign-in.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "token": {
                     "type": "string"
                 }
@@ -1567,6 +1631,11 @@
                     "description": "google, facebook, apple, telegram, github etc.",
                     "type": "string"
                 },
+                "nonce": {
+                    "description": "Nonce is an optional random value the client generates and keeps (for\nexample in session storage) for this sign-in; it is presented again on\nthe token exchange, so a sign-in another browser started cannot be\ncompleted in this one. At least 16 random characters are recommended.",
+                    "type": "string",
+                    "maxLength": 128
+                },
                 "redirect": {
                     "type": "string"
                 }
@@ -1589,6 +1658,11 @@
                 "method": {
                     "description": "google, facebook, apple, telegram, github etc.",
                     "type": "string"
+                },
+                "nonce": {
+                    "description": "Nonce is the value the client sent when it started this sign-in; a\nsign-in started with a nonce is completed only with the same one, and\none started without a nonce only without one.",
+                    "type": "string",
+                    "maxLength": 128
                 }
             }
         },
@@ -1666,6 +1740,10 @@
                 "type"
             ],
             "properties": {
+                "cf_token": {
+                    "description": "CfToken is the Turnstile response an anonymous request for a\nregistration code (type 1) carries while registration verification is\non; other requests leave it empty.",
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -1697,6 +1775,10 @@
                 "type"
             ],
             "properties": {
+                "cf_token": {
+                    "description": "CfToken is the Turnstile response an anonymous request for a\nregistration code (type 1) carries while registration verification is\non; other requests leave it empty.",
+                    "type": "string"
+                },
                 "telephone": {
                     "type": "string"
                 },
