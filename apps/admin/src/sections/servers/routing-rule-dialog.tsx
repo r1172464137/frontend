@@ -115,8 +115,8 @@ export function RoutingRuleDialog({
               )}
             </p>
             <RoutingUsers
-              value={draft.user_ids || []}
               onChange={(user_ids) => setDraft({ ...draft, user_ids })}
+              value={draft.user_ids || []}
             />
           </div>
           <SingleRouteMatchEditor

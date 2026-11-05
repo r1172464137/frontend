@@ -44,13 +44,14 @@ export function NodeRoutingEditor({
   function saveRule(rule: API.NodeRouteRule) {
     const index = value.rules.findIndex((item) => item.id === rule.id);
     const rules = [...value.rules];
-    if (index < 0) rules.push(rule);
-    else rules[index] = rule;
+    const { user_ids, ...unscopedRule } = rule;
+    const normalizedRule = user_ids?.length ? rule : unscopedRule;
+    if (index < 0) rules.push(normalizedRule);
+    else rules[index] = normalizedRule;
     const previous = value.rules[index];
     const scopeChanged =
       JSON.stringify(previous?.user_ids || []) !==
       JSON.stringify(rule.user_ids || []);
-    if (!rule.user_ids?.length) delete rule.user_ids;
     onChange(
       scopeChanged
         ? {
@@ -266,13 +267,12 @@ export function NodeRoutingEditor({
             >
               <span>#{entry.user_id}</span>
               <select
-                disabled={readOnly}
                 aria-label={t(
                   "ordered_routing.user_default_target",
                   "Account default outbound"
                 )}
                 className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
-                value={entry.outbound_id}
+                disabled={readOnly}
                 onChange={(event) =>
                   onChange({
                     ...value,
@@ -283,6 +283,7 @@ export function NodeRoutingEditor({
                     ),
                   })
                 }
+                value={entry.outbound_id}
               >
                 {options.map((option) => (
                   <option key={option.id} value={option.id}>
@@ -295,7 +296,6 @@ export function NodeRoutingEditor({
           {!readOnly && (
             <RoutingUsers
               defaults
-              value={(value.user_defaults || []).map((entry) => entry.user_id)}
               onChange={(users) =>
                 onChange({
                   ...value,
@@ -308,6 +308,7 @@ export function NodeRoutingEditor({
                   ),
                 })
               }
+              value={(value.user_defaults || []).map((entry) => entry.user_id)}
             />
           )}
         </div>

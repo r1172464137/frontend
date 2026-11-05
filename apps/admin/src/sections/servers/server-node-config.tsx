@@ -305,7 +305,7 @@ export default function ServerNodeConfig({
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && (saving || refreshingStatus)) return;
-    if (!nextOpen && !saveError && !conflict) holdDraft.current = false;
+    if (!(nextOpen || saveError || conflict)) holdDraft.current = false;
     if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
       holdDraft.current = false;
       resetConfig(queryConfig);
@@ -770,19 +770,20 @@ export default function ServerNodeConfig({
                         )}
                         {validConfig && routing && globalPolicy && (
                           <RoutingDNS
-                            value={inheritRouting ? globalPolicy : routing}
-                            readOnly={inheritRouting}
                             onChange={(next) => {
                               holdDraft.current = true;
                               setRouting(next);
                               setRoutingDirty(true);
                             }}
+                            readOnly={inheritRouting}
+                            value={inheritRouting ? globalPolicy : routing}
                           />
                         )}
                       </TabsContent>
 
                       <TabsContent className="space-y-4" value="routing">
                         <RoutingStatus
+                          desiredSnapshotID={cfgResp.desired_snapshot_id}
                           expected={routingIdentityFromProjection(
                             cfgResp.effective.routing
                           )}
@@ -796,7 +797,6 @@ export default function ServerNodeConfig({
                           }
                           status={cfgResp.routing_status}
                           version={cfgResp.effective.routing.version}
-                          desiredSnapshotID={cfgResp.desired_snapshot_id}
                         />
                         <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
                           <div className="space-y-1">
@@ -834,11 +834,11 @@ export default function ServerNodeConfig({
                         {needsDowngrade && (
                           <label className="flex items-center gap-2 text-sm">
                             <input
-                              type="checkbox"
                               checked={allowDowngrade}
                               onChange={(event) =>
                                 setAllowDowngrade(event.target.checked)
                               }
+                              type="checkbox"
                             />
                             {t(
                               "ordered_routing.confirm_downgrade",

@@ -202,7 +202,7 @@ export function validateNodeRouting(value: unknown): RoutingIssue[] {
       raw.tag &&
       raw.tag !== "Default" &&
       raw.tag !== "block" &&
-      (!rawTarget || !custom.has(rawTarget))
+      !(rawTarget && custom.has(rawTarget))
     )
       add("unknownOutbound", `outbounds.${outbound.id}.stream_settings`);
     links.set(
@@ -404,14 +404,14 @@ export function routingReadbackMatches(
     ...policy,
     outbounds: policy.outbounds.map(canonicalConnection),
     rules: policy.rules.map((rule) => {
-      const result = {
-        ...rule,
+      const { user_ids, ...rest } = rule;
+      return {
+        ...rest,
         values: canonicalizeRouteRules(rule.kind, rule.values),
+        ...(user_ids?.length
+          ? { user_ids: [...new Set(user_ids)].sort((a, b) => a - b) }
+          : {}),
       };
-      if (!result.user_ids?.length) delete result.user_ids;
-      else
-        result.user_ids = [...new Set(result.user_ids)].sort((a, b) => a - b);
-      return result;
     }),
     ...(policy.user_defaults
       ? {
@@ -425,9 +425,11 @@ export function routingReadbackMatches(
           dns_policy: {
             ...policy.dns_policy,
             resolvers: policy.dns_policy.resolvers.map((resolver) => {
+              const { bootstrap_ip, ...rest } = resolver;
               const result = {
-                ...resolver,
+                ...rest,
                 domains: canonicalizeRouteRules("domain", resolver.domains),
+                ...(bootstrap_ip ? { bootstrap_ip } : {}),
               };
               if (
                 resolver.protocol !== "https" &&
@@ -435,8 +437,10 @@ export function routingReadbackMatches(
               )
                 result.address =
                   canonicalDNSAddress(resolver.address) ?? resolver.address;
-              if (!result.bootstrap_ip) delete result.bootstrap_ip;
-              else if (z.ipv6().safeParse(result.bootstrap_ip).success)
+              if (
+                result.bootstrap_ip &&
+                z.ipv6().safeParse(result.bootstrap_ip).success
+              )
                 result.bootstrap_ip =
                   canonicalDNSAddress(result.bootstrap_ip) ??
                   result.bootstrap_ip;

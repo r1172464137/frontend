@@ -2,14 +2,16 @@ import { Button } from "@workspace/ui/components/button";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { newRoutingID, validateNodeRouting } from "./node-routing";
 
 function Domains({
+  id,
   value,
   onChange,
 }: {
+  id: string;
   value: string[];
   onChange: (value: string[]) => void;
 }) {
@@ -26,7 +28,7 @@ function Domains({
   return (
     <Textarea
       aria-label={t("ordered_routing.dns_domains", "Domains (one per line)")}
-      value={text}
+      id={id}
       onChange={(e) => {
         const lines = e.target.value
           .split("\n")
@@ -36,6 +38,7 @@ function Domains({
         lastEmitted.current = lines.join("\n");
         onChange(lines);
       }}
+      value={text}
     />
   );
 }
@@ -49,16 +52,16 @@ export function RoutingDNS({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation("servers");
+  const id = useId();
   const policy = value.dns_policy;
   const update = (dns_policy: API.NodeRouting["dns_policy"]) => {
-    const next = {
-      ...value,
+    const { dns_policy: _previousPolicy, ...rest } = value;
+    onChange({
+      ...rest,
       version: 2 as const,
       user_defaults: value.user_defaults || [],
-    };
-    if (dns_policy) next.dns_policy = dns_policy;
-    else delete next.dns_policy;
-    onChange(next);
+      ...(dns_policy ? { dns_policy } : {}),
+    });
   };
   const patch = (index: number, changes: Partial<API.RoutingDNSResolver>) => {
     if (!policy) return;
@@ -88,10 +91,14 @@ export function RoutingDNS({
           "Resolvers are matched in order; the last resolver is the default. Failure does not fall back to system DNS or another outbound."
         )}
       </p>
-      <label className="flex items-center gap-2 text-sm">
+      <label
+        className="flex items-center gap-2 text-sm"
+        htmlFor={`${id}-enabled`}
+      >
         <Checkbox
-          disabled={readOnly}
           checked={Boolean(policy)}
+          disabled={readOnly}
+          id={`${id}-enabled`}
           onCheckedChange={(checked) =>
             update(
               checked === true
@@ -121,21 +128,20 @@ export function RoutingDNS({
           .filter((issue) => issue.path.startsWith("dns_policy"))
           .map((issue, index) => (
             <p
-              role="alert"
               className="text-destructive text-sm"
               key={`${issue.path}-${index}`}
+              role="alert"
             >
               {issue.path}:{" "}
               {t(`ordered_routing.errors.${issue.code}`, issue.code)}
             </p>
           ))}
       {policy && (
-        <fieldset disabled={readOnly} className="space-y-3">
+        <fieldset className="space-y-3" disabled={readOnly}>
           <label className="block text-sm">
             {t("ordered_routing.query_strategy", "Query strategy")}
             <select
               className="mt-1 h-9 w-full rounded-md border bg-background px-3"
-              value={policy.query_strategy}
               onChange={(e) =>
                 update({
                   ...policy,
@@ -143,6 +149,7 @@ export function RoutingDNS({
                     .value as typeof policy.query_strategy,
                 })
               }
+              value={policy.query_strategy}
             >
               <option>UseIP</option>
               <option>UseIPv4</option>
@@ -150,7 +157,7 @@ export function RoutingDNS({
             </select>
           </label>
           {policy.resolvers.map((resolver, index) => (
-            <div key={resolver.id} className="space-y-2 rounded border p-3">
+            <div className="space-y-2 rounded border p-3" key={resolver.id}>
               <div className="flex flex-wrap items-center gap-2">
                 <strong>
                   {index + 1}.{" "}
@@ -159,9 +166,6 @@ export function RoutingDNS({
                     : t("ordered_routing.dns_rule", "Resolver rule")}
                 </strong>
                 <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
                   aria-label={t(
                     "ordered_routing.dns_move_up",
                     "Move resolver {{number}} up",
@@ -178,13 +182,13 @@ export function RoutingDNS({
                     ];
                     update({ ...policy, resolvers });
                   }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
                 >
                   ↑
                 </Button>
                 <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
                   aria-label={t(
                     "ordered_routing.dns_move_down",
                     "Move resolver {{number}} down",
@@ -199,13 +203,13 @@ export function RoutingDNS({
                     ];
                     update({ ...policy, resolvers });
                   }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
                 >
                   ↓
                 </Button>
                 <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
                   disabled={index === policy.resolvers.length - 1}
                   onClick={() =>
                     update({
@@ -213,6 +217,9 @@ export function RoutingDNS({
                       resolvers: policy.resolvers.filter((_, i) => i !== index),
                     })
                   }
+                  size="sm"
+                  type="button"
+                  variant="outline"
                 >
                   {t("delete", "Delete")}
                 </Button>
@@ -221,48 +228,60 @@ export function RoutingDNS({
                 {t("ordered_routing.dns_protocol", "Protocol")}
                 <select
                   className="mt-1 h-9 w-full rounded-md border bg-background px-3"
-                  value={resolver.protocol}
                   onChange={(e) => {
                     const protocol = e.target
                       .value as API.RoutingDNSResolver["protocol"];
                     patch(index, { protocol });
                   }}
+                  value={resolver.protocol}
                 >
                   <option>udp</option>
                   <option>tcp</option>
                   <option>https</option>
                 </select>
               </label>
-              <label className="block text-sm">
+              <label
+                className="block text-sm"
+                htmlFor={`${id}-${index}-address`}
+              >
                 {t("ordered_routing.dns_address", "Resolver address")}
                 <Input
-                  value={resolver.address}
+                  id={`${id}-${index}-address`}
                   onChange={(e) => patch(index, { address: e.target.value })}
                   placeholder={
                     resolver.protocol === "https"
                       ? "https://dns.example.com/dns-query"
                       : "192.0.2.53:53"
                   }
+                  value={resolver.address}
                 />
               </label>
-              <label className="block text-sm">
+              <label
+                className="block text-sm"
+                htmlFor={`${id}-${index}-bootstrap`}
+              >
                 {t(
                   "ordered_routing.bootstrap_ip",
                   "Bootstrap IP (hostname resolver)"
                 )}
                 <Input
-                  value={resolver.bootstrap_ip || ""}
+                  id={`${id}-${index}-bootstrap`}
                   onChange={(e) =>
                     patch(index, { bootstrap_ip: e.target.value })
                   }
+                  value={resolver.bootstrap_ip || ""}
                 />
               </label>
               {index < policy.resolvers.length - 1 && (
-                <label className="block text-sm">
+                <label
+                  className="block text-sm"
+                  htmlFor={`${id}-${index}-domains`}
+                >
                   {t("ordered_routing.dns_domains", "Domains (one per line)")}
                   <Domains
-                    value={resolver.domains}
+                    id={`${id}-${index}-domains`}
                     onChange={(domains) => patch(index, { domains })}
+                    value={resolver.domains}
                   />
                 </label>
               )}
@@ -270,10 +289,10 @@ export function RoutingDNS({
                 {t("ordered_routing.dns_outbound", "DNS query outbound")}
                 <select
                   className="mt-1 h-9 w-full rounded-md border bg-background px-3"
-                  value={resolver.outbound_id}
                   onChange={(e) =>
                     patch(index, { outbound_id: e.target.value })
                   }
+                  value={resolver.outbound_id}
                 >
                   <option value="direct">
                     {t("ordered_routing.direct", "Node direct")}
@@ -288,8 +307,6 @@ export function RoutingDNS({
             </div>
           ))}
           <Button
-            type="button"
-            variant="outline"
             onClick={() => {
               const resolvers = [...policy.resolvers];
               resolvers.splice(Math.max(0, resolvers.length - 1), 0, {
@@ -301,6 +318,8 @@ export function RoutingDNS({
               });
               update({ ...policy, resolvers });
             }}
+            type="button"
+            variant="outline"
           >
             {t("ordered_routing.add_dns_rule", "Add resolver rule")}
           </Button>

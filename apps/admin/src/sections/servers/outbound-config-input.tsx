@@ -533,7 +533,6 @@ export function OutboundConfigInput({
                           "Connect through outbound"
                         )}
                         className="h-9 w-full rounded-md border bg-background px-3"
-                        value={item.via_outbound_id || ""}
                         onChange={(event) =>
                           emit(
                             items.map((candidate, i) =>
@@ -546,6 +545,7 @@ export function OutboundConfigInput({
                             )
                           )
                         }
+                        value={item.via_outbound_id || ""}
                       >
                         <option value="">
                           {t(

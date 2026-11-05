@@ -2,7 +2,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Input } from "@workspace/ui/components/input";
 import { getUserList } from "@workspace/ui/services/admin/admin";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 export function RoutingUsers({
@@ -15,6 +15,7 @@ export function RoutingUsers({
   defaults?: boolean;
 }) {
   const { t } = useTranslation("servers");
+  const id = useId();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<{ list: API.User[]; total: number }>();
@@ -27,8 +28,8 @@ export function RoutingUsers({
       getUserList({ page, size: 20, search })
         .then(({ data }) => {
           if (active) {
-            if (!data.data) setError(true);
-            else setResult(data.data);
+            if (data.data) setResult(data.data);
+            else setError(true);
           }
         })
         .catch(() => {
@@ -57,22 +58,22 @@ export function RoutingUsers({
       </p>
       <Input
         aria-label={t("ordered_routing.search_users", "Search accounts")}
-        placeholder={t("ordered_routing.search_users", "Search accounts")}
-        value={search}
         onChange={(e) => {
           setSearch(e.target.value);
           setPage(1);
         }}
+        placeholder={t("ordered_routing.search_users", "Search accounts")}
+        value={search}
       />
       {value.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {value.map((id) => (
             <Button
               key={id}
+              onClick={() => onChange(value.filter((v) => v !== id))}
               size="sm"
               type="button"
               variant="outline"
-              onClick={() => onChange(value.filter((v) => v !== id))}
             >
               #{id} ×
             </Button>
@@ -83,18 +84,18 @@ export function RoutingUsers({
         <p role="alert">
           {t("ordered_routing.users_error", "Could not load accounts.")}
         </p>
-      ) : !result ? (
-        <p>{t("ordered_routing.loading_users", "Loading accounts…")}</p>
-      ) : (
+      ) : result ? (
         <>
           <div className="max-h-48 space-y-1 overflow-y-auto">
             {result.list.map((user) => (
               <label
-                key={user.id}
                 className="flex items-center gap-2 break-all text-sm"
+                htmlFor={`${id}-${user.id}`}
+                key={user.id}
               >
                 <Checkbox
                   checked={value.includes(user.id)}
+                  id={`${id}-${user.id}`}
                   onCheckedChange={(checked) =>
                     onChange(
                       checked === true
@@ -112,26 +113,28 @@ export function RoutingUsers({
           </div>
           <div className="flex items-center gap-2">
             <Button
-              type="button"
-              size="sm"
-              variant="outline"
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
+              size="sm"
+              type="button"
+              variant="outline"
             >
               {t("ordered_routing.previous", "Previous")}
             </Button>
             <span>{page}</span>
             <Button
-              type="button"
-              size="sm"
-              variant="outline"
               disabled={page * 20 >= result.total}
               onClick={() => setPage(page + 1)}
+              size="sm"
+              type="button"
+              variant="outline"
             >
               {t("ordered_routing.next", "Next")}
             </Button>
           </div>
         </>
+      ) : (
+        <p>{t("ordered_routing.loading_users", "Loading accounts…")}</p>
       )}
     </div>
   );

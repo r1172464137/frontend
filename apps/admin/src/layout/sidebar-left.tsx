@@ -18,11 +18,11 @@ import {
 import { Icon } from "@workspace/ui/composed/icon";
 import { cn } from "@workspace/ui/lib/utils";
 import React, { useState } from "react";
-import { useGlobalStore } from "@/stores/global";
-import { type NavItem, useNavs } from "./navs";
-import { filterMenu, useInterfaceConfig } from "./interface-config";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useGlobalStore } from "@/stores/global";
+import { filterMenu, useInterfaceConfig } from "./interface-config";
+import { type NavItem, useNavs } from "./navs";
 
 function hasChildren(obj: any): obj is { items: any[] } {
   return (

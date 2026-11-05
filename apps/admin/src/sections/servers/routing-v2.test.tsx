@@ -8,8 +8,6 @@ import {
 } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { NodeRoutingEditor } from "./node-routing-editor";
-import { RoutingDNS } from "./routing-dns";
 import {
   outboundReferences,
   routingApplicationState,
@@ -17,6 +15,8 @@ import {
   routingReadbackMatches,
   validateNodeRouting,
 } from "./node-routing";
+import { NodeRoutingEditor } from "./node-routing-editor";
+import { RoutingDNS } from "./routing-dns";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -85,8 +85,8 @@ function Harness() {
   const [value, setValue] = useState(base);
   return (
     <>
-      <NodeRoutingEditor value={value} onChange={setValue} />
-      <RoutingDNS value={value} onChange={setValue} />
+      <NodeRoutingEditor onChange={setValue} value={value} />
+      <RoutingDNS onChange={setValue} value={value} />
       <output data-testid="policy">{JSON.stringify(value)}</output>
     </>
   );
@@ -98,9 +98,15 @@ beforeEach(() => {
   vi.stubGlobal(
     "ResizeObserver",
     class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+      observe() {
+        /* test observer */
+      }
+      unobserve() {
+        /* test observer */
+      }
+      disconnect() {
+        /* test observer */
+      }
     }
   );
   list.mockClear();
@@ -251,9 +257,8 @@ it("keeps multiline DNS drafts while applying external resolver readback and lab
     const [value, setValue] = useState(initial);
     return (
       <>
-        <RoutingDNS value={value} onChange={setValue} />
+        <RoutingDNS onChange={setValue} value={value} />
         <button
-          type="button"
           onClick={() =>
             setValue({
               ...initial,
@@ -267,6 +272,7 @@ it("keeps multiline DNS drafts while applying external resolver readback and lab
               },
             })
           }
+          type="button"
         >
           Read back
         </button>

@@ -58,7 +58,11 @@ vi.mock("@workspace/ui/components/sidebar", () => {
       asChild ? (
         children
       ) : (
-        <button onClick={onClick} aria-label={props["aria-label"]}>
+        <button
+          aria-label={props["aria-label"]}
+          onClick={onClick}
+          type="button"
+        >
           {children}
         </button>
       ),

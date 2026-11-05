@@ -296,7 +296,7 @@ export default function ServerConfig() {
     <Sheet
       onOpenChange={(nextOpen) => {
         if (!nextOpen && saving) return;
-        if (!nextOpen && !saveError && !conflict) holdDraft.current = false;
+        if (!(nextOpen || saveError || conflict)) holdDraft.current = false;
         if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
           holdDraft.current = false;
           resetConfig(queryConfig);
@@ -706,12 +706,12 @@ export default function ServerConfig() {
                     )}
                     {validConfig && routing && (
                       <RoutingDNS
-                        value={routing}
                         onChange={(next) => {
                           holdDraft.current = true;
                           setRouting(next);
                           setRoutingDirty(true);
                         }}
+                        value={routing}
                       />
                     )}
                   </TabsContent>
@@ -758,7 +758,7 @@ export default function ServerConfig() {
           <Button
             disabled={saving}
             onClick={() => {
-              if (!saveError && !conflict) holdDraft.current = false;
+              if (!(saveError || conflict)) holdDraft.current = false;
               setOpen(false);
             }}
             variant="outline"

@@ -54,7 +54,7 @@ export default function InterfaceForm() {
   function changeOpen(next: boolean) {
     if (saving) return;
     setOpen(next);
-    if (next) void load();
+    if (next) load();
     else loadSequence.current++;
   }
   async function save() {
@@ -74,18 +74,15 @@ export default function InterfaceForm() {
     }
   }
   return (
-    <Sheet open={open} onOpenChange={changeOpen}>
+    <Sheet onOpenChange={changeOpen} open={open}>
       <SheetTrigger asChild>
         <button
-          type="button"
           className="flex w-full cursor-pointer items-center justify-between text-left transition-colors"
+          type="button"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Icon
-                className="h-5 w-5 text-primary"
-                icon="mdi:tune-variant"
-              />
+              <Icon className="h-5 w-5 text-primary" icon="mdi:tune-variant" />
             </div>
             <div>
               <p className="font-medium">
@@ -111,11 +108,11 @@ export default function InterfaceForm() {
             <p className="py-4">{t("interface.loading", "Loading…")}</p>
           )}
           {error && (
-            <div role="alert" className="space-y-2 py-4">
+            <div className="space-y-2 py-4" role="alert">
               <p>
                 {t("interface.loadFailed", "Failed to load interface settings")}
               </p>
-              <Button variant="outline" onClick={() => void load()}>
+              <Button onClick={() => load()} variant="outline">
                 {t("interface.retry", "Retry")}
               </Button>
             </div>
@@ -131,14 +128,14 @@ export default function InterfaceForm() {
               {navs.map((nav) => {
                 const items = nav.items ?? [nav];
                 return (
-                  <div key={nav.url ?? nav.title} className="space-y-2">
+                  <div className="space-y-2" key={nav.url ?? nav.title}>
                     {nav.items && <h3 className="font-medium">{nav.title}</h3>}
                     {items.map(
                       (item) =>
                         item.url && (
                           <div
-                            key={item.url}
                             className="flex items-center justify-between gap-4 py-1"
+                            key={item.url}
                           >
                             <span id={`menu-${item.url}`}>{item.title}</span>
                             <Switch
@@ -163,10 +160,10 @@ export default function InterfaceForm() {
                 );
               })}
               <Button
-                type="button"
-                variant="outline"
                 disabled={saving}
                 onClick={() => setDraft([])}
+                type="button"
+                variant="outline"
               >
                 {t("interface.restore", "Show all")}
               </Button>
@@ -181,10 +178,7 @@ export default function InterfaceForm() {
           >
             {t("common.cancel", "Cancel")}
           </Button>
-          <Button
-            disabled={!draft || loading || saving}
-            onClick={() => void save()}
-          >
+          <Button disabled={!draft || loading || saving} onClick={() => save()}>
             {t("common.save", "Save Settings")}
           </Button>
         </SheetFooter>
