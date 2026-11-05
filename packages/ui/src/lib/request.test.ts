@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { AxiosError } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import request from "./request";
 
@@ -52,14 +53,25 @@ describe("backend errors", () => {
 
   it("shows the routing conflict message for an HTTP 409", async () => {
     request.defaults.adapter = async (config) => {
-      throw {
-        message: "Request failed with status code 409",
-        response: { config, status: 409, data: { code: 160_001 } },
-      };
+      throw new AxiosError(
+        "Request failed with status code 409",
+        AxiosError.ERR_BAD_REQUEST,
+        config,
+        undefined,
+        {
+          config,
+          status: 409,
+          statusText: "Conflict",
+          headers: {},
+          data: { code: 160_001 },
+        }
+      );
     };
     await expect(request.get("/fixture")).rejects.toBeDefined();
     expect(toastError).toHaveBeenCalledWith(
-      expect.stringContaining("components:error.160001:Global routing has changed")
+      expect.stringContaining(
+        "components:error.160001:Global routing has changed"
+      )
     );
   });
 
