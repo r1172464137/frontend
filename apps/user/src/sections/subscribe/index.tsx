@@ -47,6 +47,10 @@ export default function Subscribe() {
   const locale = i18n.language;
   const [subscribe, setSubscribe] = useState<API.Subscribe>();
   const [pendingPlan, setPendingPlan] = useState<API.Subscribe>();
+  const [renewing, setRenewing] = useState<{
+    id: number;
+    subscribe: API.Subscribe;
+  }>();
 
   const { data: subscribeList } = useQuery({
     queryKey: ["querySubscribeList", locale],
@@ -354,11 +358,15 @@ export default function Subscribe() {
                     {t("expireAt", "Expires At")}: {formatDate(sub.expire_time)}
                   </p>
                 </div>
-                <Renewal
+                <Button
                   className="w-full sm:w-auto sm:min-w-28"
-                  id={sub.id}
-                  subscribe={sub.subscribe}
-                />
+                  onClick={() => {
+                    setPendingPlan(undefined);
+                    setRenewing({ id: sub.id, subscribe: sub.subscribe });
+                  }}
+                >
+                  {t("renew", "Renew")}
+                </Button>
               </div>
             ))}
           </div>
@@ -377,6 +385,16 @@ export default function Subscribe() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {renewing && (
+        <Renewal
+          id={renewing.id}
+          onOpenChange={(open) => {
+            if (!open) setRenewing(undefined);
+          }}
+          open
+          subscribe={renewing.subscribe}
+        />
+      )}
       <Purchase setSubscribe={setSubscribe} subscribe={subscribe} />
     </>
   );

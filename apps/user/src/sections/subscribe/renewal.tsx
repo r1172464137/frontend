@@ -30,17 +30,23 @@ interface RenewalProps {
   id: number;
   subscribe: API.Subscribe;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export default function Renewal({
   id,
   subscribe,
   className,
+  open: controlledOpen,
+  onOpenChange,
 }: Readonly<RenewalProps>) {
   const { t } = useTranslation("subscribe");
   const { getUserInfo } = useGlobalStore();
   const navigate = useNavigate();
-  const [open, setOpen] = useState<boolean>(false);
+  const [internalOpen, setInternalOpen] = useState<boolean>(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [params, setParams] = useState<Partial<API.RenewalOrderRequest>>({
     quantity: 1,
     payment: -1,
@@ -120,11 +126,13 @@ export default function Renewal({
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
-      <DialogTrigger asChild>
-        <Button className={className} size={className ? "default" : "sm"}>
-          {t("renew", "Renew")}
-        </Button>
-      </DialogTrigger>
+      {controlledOpen === undefined && (
+        <DialogTrigger asChild>
+          <Button className={className} size={className ? "default" : "sm"}>
+            {t("renew", "Renew")}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="flex h-full flex-col overflow-y-auto md:h-auto md:max-w-screen-lg">
         <DialogHeader>
           <DialogTitle>
