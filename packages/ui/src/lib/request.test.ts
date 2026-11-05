@@ -39,6 +39,30 @@ describe("backend errors", () => {
     );
   });
 
+  it.each([
+    [160_001, "Global routing has changed"],
+    [160_002, "Settings were saved but could not be applied"],
+  ])("distinguishes platform error %i", async (code, message) => {
+    respond(code, "server message");
+    await expect(request.get("/fixture")).rejects.toThrow(message);
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringContaining(`components:error.${code}`)
+    );
+  });
+
+  it("shows the routing conflict message for an HTTP 409", async () => {
+    request.defaults.adapter = async (config) => {
+      throw {
+        message: "Request failed with status code 409",
+        response: { config, status: 409, data: { code: 160_001 } },
+      };
+    };
+    await expect(request.get("/fixture")).rejects.toBeDefined();
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringContaining("components:error.160001:Global routing has changed")
+    );
+  });
+
   it("keeps unknown server messages and respects skipErrorHandler", async () => {
     respond(999_999, "fixture server message");
     await expect(

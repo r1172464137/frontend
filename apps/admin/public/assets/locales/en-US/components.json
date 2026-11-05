@@ -108,7 +108,8 @@
     "120017": "This withdrawal has already been reviewed.",
     "130001": "The subscription status has changed. Please refresh and try again.",
     "130002": "This subscription status cannot be toggled.",
-    "160001": "Settings were saved but could not be applied. Please reload or restart the service.",
+    "160001": "Global routing has changed. Refresh the settings and try again.",
+    "160002": "Settings were saved but could not be applied. Please reload or restart the service.",
     "unknown": "An error occurred in the system, please try again later."
   },
   "language": "Language",

@@ -335,6 +335,10 @@ function handleError(response: {
     ),
     160001: t(
       "components:error.160001",
+      "Global routing has changed. Refresh the settings and try again."
+    ),
+    160002: t(
+      "components:error.160002",
       "Settings were saved but could not be applied. Please reload or restart the service."
     ),
   };
