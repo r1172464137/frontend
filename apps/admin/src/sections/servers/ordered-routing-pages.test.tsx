@@ -1105,7 +1105,7 @@ describe("cutover node configuration forms", () => {
     openServer();
     fireEvent.click(screen.getByRole("switch", { name: "Use global routing" }));
     const confirm = screen.queryByLabelText(
-      /Confirm loss of v2 routing features/
+      /Confirm loss of account rules, chained outbounds and DNS policy/
     );
     if (globalVersion === 1) {
       expect(confirm).toBeTruthy();

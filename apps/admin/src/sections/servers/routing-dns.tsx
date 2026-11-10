@@ -77,14 +77,6 @@ export function RoutingDNS({
       <h3 className="font-semibold">
         {t("ordered_routing.dns_policy", "Routing DNS policy")}
       </h3>
-      {value.version === 2 && (
-        <p className="text-destructive text-sm" role="alert">
-          {t(
-            "ordered_routing.v2_warning",
-            "Before enabling v2, upgrade all affected nodes; stop or upgrade offline or unknown nodes. Older running nodes may continue using their previous policy."
-          )}
-        </p>
-      )}
       <p className="text-muted-foreground text-sm">
         {t(
           "ordered_routing.dns_policy_hint",

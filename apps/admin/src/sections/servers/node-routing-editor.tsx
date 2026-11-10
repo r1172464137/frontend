@@ -173,14 +173,6 @@ export function NodeRoutingEditor({
   }
   return (
     <div className="min-w-0 space-y-5">
-      {value.version === 2 && (
-        <p className="text-destructive text-sm" role="alert">
-          {t(
-            "ordered_routing.v2_warning",
-            "Before enabling v2, upgrade all affected nodes; stop or upgrade offline or unknown nodes. Older running nodes may continue using their previous policy."
-          )}
-        </p>
-      )}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold">

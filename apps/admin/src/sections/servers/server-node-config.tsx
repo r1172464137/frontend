@@ -842,7 +842,7 @@ export default function ServerNodeConfig({
                             />
                             {t(
                               "ordered_routing.confirm_downgrade",
-                              "Confirm loss of v2 routing features when inheriting the v1 global policy"
+                              "Confirm loss of account rules, chained outbounds and DNS policy when inheriting the global policy"
                             )}
                           </label>
                         )}
