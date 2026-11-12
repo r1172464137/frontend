@@ -524,13 +524,14 @@ subscription URL does not carry them, in query-string form such as
     uot_version?: number;
     user?: string;
     uuid?: string;
+    /** ViaOutboundID names the custom outbound this one dials through
+(node -> via -> this -> target). Empty means a direct connection. */
     via_outbound_id?: string;
     xhttp_extra?: string;
     xhttp_mode?: string;
   };
 
   type GeneratedGetServerNodeConfigResponse = {
-    desired_snapshot_id: string;
     effective: GeneratedServerNodeConfigValues;
     global: GeneratedServerNodeConfigValues;
     override: GeneratedServerNodeConfigOverride;
@@ -538,14 +539,11 @@ subscription URL does not carry them, in query-string form such as
   };
 
   type GeneratedNodeConfig = {
-    dns: NodeDNS[];
-    ip_strategy: string;
     node_pull_interval: number;
     node_push_interval: number;
     node_secret: string;
     routing: GeneratedNodeRouting;
     routing_capabilities: number[];
-    routing_downgrade?: boolean;
     routing_mode: string;
     routing_revision: number;
     traffic_report_threshold: number;
@@ -553,45 +551,40 @@ subscription URL does not carry them, in query-string form such as
 
   type GeneratedNodeRouting = {
     default_outbound_id: string;
-    dns_policy: NodeDNSPolicy;
+    dns: NodeDNSPolicy;
     outbounds: GeneratedConfigNodeOutbound[];
     rules: NodeRoute[];
+    target_ip_preference: string;
     user_defaults: NodeUserDefault[];
     version: number;
   };
 
   type GeneratedRoutingStatusView = {
+    /** DesiredSnapshotID is the snapshot the node should be running, computed
+read-only from the database; null when it cannot be computed. */
+    desired_snapshot_id?: string;
     known: boolean;
     report?: RoutingStatusReport;
     reporter_verified: boolean;
+    /** Synced is true only when the verified applied identity equals desired. */
+    synced: boolean;
   };
 
   type GeneratedServerNodeConfigOverride = {
-    dns: NodeDNS[];
-    inherit_dns: boolean;
-    inherit_ip_strategy: boolean;
     inherit_routing: boolean;
-    ip_strategy: string;
     routing: GeneratedNodeRouting;
     routing_revision: number;
   };
 
   type GeneratedServerNodeConfigValues = {
-    dns: NodeDNS[];
-    ip_strategy: string;
     routing: NodeRoutingPolicy;
     routing_mode: string;
     routing_revision: number;
   };
 
   type GeneratedUpdateServerNodeConfigRequest = {
-    dns?: NodeDNS[];
-    inherit_dns?: boolean;
-    inherit_ip_strategy?: boolean;
     inherit_routing?: boolean;
-    ip_strategy?: string;
     routing?: GeneratedNodeRouting;
-    routing_downgrade?: boolean;
     routing_revision?: number;
     server_id: number;
   };
@@ -1174,13 +1167,6 @@ subscription URL does not carry them, in query-string form such as
     updated_at: number;
   };
 
-  type NodeDNS = {
-    address: string;
-    domains: string[];
-    proto: string;
-    server_name?: string;
-  };
-
   type NodeDNSPolicy = {
     query_strategy: string;
     resolvers: NodeDNSResolver[];
@@ -1212,7 +1198,7 @@ subscription URL does not carry them, in query-string form such as
     heartbeat?: number;
     host?: string;
     id?: string;
-    /** Must be empty in v1. */
+    /** Must be empty. */
     ip_rules?: string[];
     multiplex?: string;
     name: string;
@@ -1222,12 +1208,12 @@ subscription URL does not carry them, in query-string form such as
     plugin_opts?: any;
     port: number;
     protocol: string;
-    /** Must be empty in v1. */
+    /** Must be empty. */
     protocol_rules?: string[];
     reality_public_key?: string;
     reality_short_id?: string;
     reduce_rtt?: boolean;
-    /** Legacy match arrays are retained for protobuf compatibility and must be empty in v1. */
+    /** Legacy match arrays are retained for protobuf compatibility and must be empty. */
     rules: string[];
     security?: string;
     service_name?: string;
@@ -1241,6 +1227,7 @@ subscription URL does not carry them, in query-string form such as
     uot_version?: number;
     user?: string;
     uuid?: string;
+    /** ViaOutboundID names the custom outbound this one dials through. */
     via_outbound_id?: string;
     xhttp_extra?: string;
     xhttp_mode?: string;
@@ -1252,13 +1239,14 @@ subscription URL does not carry them, in query-string form such as
     kind: string;
     outbound_id: string;
     remark: string;
+    /** UserIDs limits the rule to these accounts (user.id); empty means all. */
     user_ids: number[];
     values: string[];
   };
 
   type NodeRoutingPolicy = {
     default_outbound_id: string;
-    dns_policy: NodeDNSPolicy;
+    dns: NodeDNSPolicy;
     local_transition_revision: number;
     mode: string;
     outbounds: NodeOutbound[];
@@ -1266,6 +1254,7 @@ subscription URL does not carry them, in query-string form such as
     source: string;
     source_revision: number;
     source_server_id: number;
+    target_ip_preference: string;
     user_defaults: NodeUserDefault[];
     version: number;
   };

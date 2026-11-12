@@ -384,13 +384,13 @@ export default function ServerNodeConfig({
                     <TabsContent className="space-y-4" value="dns">
                       {validConfig && routing && globalPolicy && (
                         <RoutingDNS
-                          value={inheritRouting ? globalPolicy : routing}
-                          readOnly={inheritRouting}
                           onChange={(next) => {
                             holdDraft.current = true;
                             setRouting(next);
                             setRoutingDirty(true);
                           }}
+                          readOnly={inheritRouting}
+                          value={inheritRouting ? globalPolicy : routing}
                         />
                       )}
                     </TabsContent>

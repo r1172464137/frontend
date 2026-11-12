@@ -57,22 +57,22 @@ export function RoutingUsers({
       </p>
       <Input
         aria-label={t("ordered_routing.search_users", "Search accounts")}
-        placeholder={t("ordered_routing.search_users", "Search accounts")}
-        value={search}
         onChange={(e) => {
           setSearch(e.target.value);
           setPage(1);
         }}
+        placeholder={t("ordered_routing.search_users", "Search accounts")}
+        value={search}
       />
       {value.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {value.map((id) => (
             <Button
               key={id}
+              onClick={() => onChange(value.filter((v) => v !== id))}
               size="sm"
               type="button"
               variant="outline"
-              onClick={() => onChange(value.filter((v) => v !== id))}
             >
               #{id} ×
             </Button>
@@ -88,8 +88,8 @@ export function RoutingUsers({
           <div className="max-h-48 space-y-1 overflow-y-auto">
             {result.list.map((user) => (
               <label
-                key={user.id}
                 className="flex items-center gap-2 break-all text-sm"
+                key={user.id}
               >
                 <Checkbox
                   checked={value.includes(user.id)}
@@ -110,21 +110,21 @@ export function RoutingUsers({
           </div>
           <div className="flex items-center gap-2">
             <Button
-              type="button"
-              size="sm"
-              variant="outline"
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
+              size="sm"
+              type="button"
+              variant="outline"
             >
               {t("ordered_routing.previous", "Previous")}
             </Button>
             <span>{page}</span>
             <Button
-              type="button"
-              size="sm"
-              variant="outline"
               disabled={page * 20 >= result.total}
               onClick={() => setPage(page + 1)}
+              size="sm"
+              type="button"
+              variant="outline"
             >
               {t("ordered_routing.next", "Next")}
             </Button>

@@ -33,7 +33,12 @@
         "useFocusableInteractive": "off",
         "useKeyWithClickEvents": "off",
         "noNoninteractiveElementInteractions": "off",
-        "noStaticElementInteractions": "off"
+        "noStaticElementInteractions": "off",
+        // Labels may wrap the house input components, not only native inputs.
+        "noLabelWithoutControl": {
+          "level": "error",
+          "options": { "inputComponents": ["Input", "Checkbox", "Textarea", "Domains"] }
+        }
       },
       "performance": {
         "noNamespaceImport": "off",

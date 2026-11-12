@@ -1,4 +1,3 @@
-import { v3 } from "./routing-fixtures.test-util";
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -10,6 +9,7 @@ import {
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NodeRoutingEditor } from "./node-routing-editor";
+import { v3 } from "./routing-fixtures.test-util";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

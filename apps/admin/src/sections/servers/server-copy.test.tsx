@@ -1,4 +1,3 @@
-import { v3 } from "./routing-fixtures.test-util";
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -9,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Servers from "./index";
+import { v3 } from "./routing-fixtures.test-util";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),

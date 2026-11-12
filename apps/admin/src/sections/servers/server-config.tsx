@@ -564,12 +564,12 @@ export default function ServerConfig() {
                   <TabsContent className="space-y-4" value="dns">
                     {validConfig && routing && (
                       <RoutingDNS
-                        value={routing}
                         onChange={(next) => {
                           holdDraft.current = true;
                           setRouting(next);
                           setRoutingDirty(true);
                         }}
+                        value={routing}
                       />
                     )}
                   </TabsContent>

@@ -1,4 +1,3 @@
-import { v3 } from "./routing-fixtures.test-util";
 // @vitest-environment jsdom
 import {
   act,
@@ -11,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { v3 } from "./routing-fixtures.test-util";
 import ServerConfig from "./server-config";
 import ServerNodeConfig from "./server-node-config";
 

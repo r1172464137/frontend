@@ -1,4 +1,3 @@
-import { v3 } from "./routing-fixtures.test-util";
 import { describe, expect, it } from "vitest";
 import {
   globalWriteMatches,
@@ -6,6 +5,7 @@ import {
   safeBackendError,
   serverWriteMatches,
 } from "./node-config-write";
+import { v3 } from "./routing-fixtures.test-util";
 
 const routing: API.NodeRouting = v3({
   version: 3,

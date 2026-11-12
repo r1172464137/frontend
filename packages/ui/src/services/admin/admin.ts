@@ -1746,7 +1746,7 @@ export async function getSystemGetNodeMultiplier(options?: {
   );
 }
 
-/** Get Interface Config GET /v1/admin/system/interface_config */
+/** Get admin interface config GET /v1/admin/system/interface_config */
 export async function getSystemInterfaceConfig(options?: {
   [key: string]: any;
 }) {
@@ -1759,7 +1759,7 @@ export async function getSystemInterfaceConfig(options?: {
   );
 }
 
-/** Update Interface Config PUT /v1/admin/system/interface_config */
+/** Update admin interface config PUT /v1/admin/system/interface_config */
 export async function putSystemInterfaceConfig(
   body: API.InterfaceConfig,
   options?: { [key: string]: any }

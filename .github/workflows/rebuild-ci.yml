@@ -20,6 +20,10 @@ jobs:
         with:
           bun-version: '1.3.1'
       - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Workspace Biome checks (same gate as the release)
+        run: bun run check
+      - name: OpenAPI regeneration contract (same gate as the release)
+        run: bun run test:openapi
       - name: Type check (admin, user; tests included)
         run: |
           (cd apps/admin && ../../node_modules/.bin/tsc --noEmit -p .)

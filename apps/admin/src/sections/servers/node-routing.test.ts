@@ -1,4 +1,3 @@
-import { v3 } from "./routing-fixtures.test-util";
 import { describe, expect, it } from "vitest";
 import {
   MAX_ROUTING_BYTES,
@@ -11,6 +10,7 @@ import {
   validateNodeRouting,
 } from "./node-routing";
 import { serializedJSONByteLength } from "./route-rules";
+import { v3 } from "./routing-fixtures.test-util";
 
 const ob = "ob_11111111-1111-4111-8111-111111111111";
 const rr = "rr_22222222-2222-4222-8222-222222222222";

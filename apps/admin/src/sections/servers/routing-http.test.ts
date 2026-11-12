@@ -1,4 +1,3 @@
-import { v3 } from "./routing-fixtures.test-util";
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import request from "@workspace/ui/lib/request";
@@ -11,6 +10,7 @@ import {
 } from "@workspace/ui/services/node-config";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { isRoutingConflict } from "./node-routing";
+import { v3 } from "./routing-fixtures.test-util";
 
 let server: Server;
 let originalBase: string | undefined;

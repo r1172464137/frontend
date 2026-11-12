@@ -25,7 +25,6 @@ function Domains({
   return (
     <Textarea
       aria-label={t("ordered_routing.dns_domains", "Domains (one per line)")}
-      value={text}
       onChange={(e) => {
         const lines = e.target.value
           .split("\n")
@@ -35,6 +34,7 @@ function Domains({
         lastEmitted.current = lines.join("\n");
         onChange(lines);
       }}
+      value={text}
     />
   );
 }
@@ -74,7 +74,6 @@ export function RoutingDNS({
         <select
           className="mt-1 h-9 w-full rounded-md border bg-background px-3"
           disabled={readOnly}
-          value={value.target_ip_preference}
           onChange={(e) =>
             onChange({
               ...value,
@@ -82,6 +81,7 @@ export function RoutingDNS({
                 .value as API.NodeRouting["target_ip_preference"],
             })
           }
+          value={value.target_ip_preference}
         >
           <option value="none">
             {t("ordered_routing.ip_none", "No preference")}
@@ -98,21 +98,20 @@ export function RoutingDNS({
         .filter((issue) => issue.path.startsWith("dns"))
         .map((issue, index) => (
           <p
-            role="alert"
             className="text-destructive text-sm"
             key={`${issue.path}-${index}`}
+            role="alert"
           >
             {issue.path}:{" "}
             {t(`ordered_routing.errors.${issue.code}`, issue.code)}
           </p>
         ))}
       {
-        <fieldset disabled={readOnly} className="space-y-3">
+        <fieldset className="space-y-3" disabled={readOnly}>
           <label className="block text-sm">
             {t("ordered_routing.query_strategy", "Query strategy")}
             <select
               className="mt-1 h-9 w-full rounded-md border bg-background px-3"
-              value={policy.query_strategy}
               onChange={(e) =>
                 update({
                   ...policy,
@@ -120,6 +119,7 @@ export function RoutingDNS({
                     .value as typeof policy.query_strategy,
                 })
               }
+              value={policy.query_strategy}
             >
               <option>UseIP</option>
               <option>UseIPv4</option>
@@ -127,7 +127,7 @@ export function RoutingDNS({
             </select>
           </label>
           {policy.resolvers.map((resolver, index) => (
-            <div key={resolver.id} className="space-y-2 rounded border p-3">
+            <div className="space-y-2 rounded border p-3" key={resolver.id}>
               <div className="flex flex-wrap items-center gap-2">
                 <strong>
                   {index + 1}.{" "}
@@ -136,9 +136,6 @@ export function RoutingDNS({
                     : t("ordered_routing.dns_rule", "Resolver rule")}
                 </strong>
                 <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
                   aria-label={t(
                     "ordered_routing.dns_move_up",
                     "Move resolver {{number}} up",
@@ -155,13 +152,13 @@ export function RoutingDNS({
                     ];
                     update({ ...policy, resolvers });
                   }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
                 >
                   ↑
                 </Button>
                 <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
                   aria-label={t(
                     "ordered_routing.dns_move_down",
                     "Move resolver {{number}} down",
@@ -176,13 +173,13 @@ export function RoutingDNS({
                     ];
                     update({ ...policy, resolvers });
                   }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
                 >
                   ↓
                 </Button>
                 <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
                   disabled={index === policy.resolvers.length - 1}
                   onClick={() =>
                     update({
@@ -190,6 +187,9 @@ export function RoutingDNS({
                       resolvers: policy.resolvers.filter((_, i) => i !== index),
                     })
                   }
+                  size="sm"
+                  type="button"
+                  variant="outline"
                 >
                   {t("delete", "Delete")}
                 </Button>
@@ -198,7 +198,6 @@ export function RoutingDNS({
                 {t("ordered_routing.dns_protocol", "Resolver protocol")}
                 <select
                   className="mt-1 h-9 w-full rounded-md border bg-background px-3"
-                  value={resolver.protocol}
                   onChange={(e) => {
                     const protocol = e.target
                       .value as API.RoutingDNSResolver["protocol"];
@@ -214,6 +213,7 @@ export function RoutingDNS({
                         : { protocol }
                     );
                   }}
+                  value={resolver.protocol}
                 >
                   <option>udp</option>
                   <option>tcp</option>
@@ -230,7 +230,6 @@ export function RoutingDNS({
                   <label className="block text-sm">
                     {t("ordered_routing.dns_address", "Resolver address")}
                     <Input
-                      value={resolver.address}
                       onChange={(e) =>
                         patch(index, { address: e.target.value })
                       }
@@ -239,6 +238,7 @@ export function RoutingDNS({
                           ? "https://dns.example.com/dns-query"
                           : "192.0.2.53:53"
                       }
+                      value={resolver.address}
                     />
                   </label>
                   <label className="block text-sm">
@@ -247,10 +247,10 @@ export function RoutingDNS({
                       "Bootstrap IP (hostname resolver)"
                     )}
                     <Input
-                      value={resolver.bootstrap_ip || ""}
                       onChange={(e) =>
                         patch(index, { bootstrap_ip: e.target.value })
                       }
+                      value={resolver.bootstrap_ip || ""}
                     />
                   </label>
                 </>
@@ -259,8 +259,8 @@ export function RoutingDNS({
                 <label className="block text-sm">
                   {t("ordered_routing.dns_domains", "Domains (one per line)")}
                   <Domains
-                    value={resolver.domains}
                     onChange={(domains) => patch(index, { domains })}
+                    value={resolver.domains}
                   />
                 </label>
               )}
@@ -269,10 +269,10 @@ export function RoutingDNS({
                 <select
                   className="mt-1 h-9 w-full rounded-md border bg-background px-3"
                   disabled={resolver.protocol === "system"}
-                  value={resolver.outbound_id}
                   onChange={(e) =>
                     patch(index, { outbound_id: e.target.value })
                   }
+                  value={resolver.outbound_id}
                 >
                   <option value="direct">
                     {t("ordered_routing.direct", "Node direct")}
@@ -287,8 +287,6 @@ export function RoutingDNS({
             </div>
           ))}
           <Button
-            type="button"
-            variant="outline"
             onClick={() => {
               const resolvers = [...policy.resolvers];
               resolvers.splice(Math.max(0, resolvers.length - 1), 0, {
@@ -300,6 +298,8 @@ export function RoutingDNS({
               });
               update({ ...policy, resolvers });
             }}
+            type="button"
+            variant="outline"
           >
             {t("ordered_routing.add_dns_rule", "Add resolver rule")}
           </Button>

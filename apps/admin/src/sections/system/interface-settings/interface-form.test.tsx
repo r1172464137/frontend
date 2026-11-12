@@ -8,9 +8,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import InterfaceForm from "./interface-form";
 import { filterMenu, interfaceConfigKey } from "@/layout/interface-config";
 import zh from "../../../../public/assets/locales/zh-CN/system.json";
+import InterfaceForm from "./interface-form";
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
@@ -71,10 +71,10 @@ vi.mock("@workspace/ui/components/scroll-area", () => ({
 vi.mock("@workspace/ui/components/switch", () => ({
   Switch: ({ checked, disabled, onCheckedChange, ...props }: any) => (
     <button
-      role="switch"
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
+      role="switch"
       {...props}
     />
   ),

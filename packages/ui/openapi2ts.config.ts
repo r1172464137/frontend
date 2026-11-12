@@ -5,8 +5,6 @@ import type { OpenAPIObject, SchemaObject } from "openapi3-ts";
 export const responseRequiredOverrides: Record<string, string[]> = {
   DownloadLink: [],
   NodeConfig: [
-    "dns",
-    "ip_strategy",
     "node_pull_interval",
     "node_push_interval",
     "node_secret",
@@ -18,23 +16,9 @@ export const responseRequiredOverrides: Record<string, string[]> = {
   ],
   NodeDNS: ["proto", "address", "domains"],
   NodeOutbound: ["name", "protocol", "address", "port", "password", "rules"],
-  ServerNodeConfigOverride: [
-    "dns",
-    "inherit_dns",
-    "inherit_ip_strategy",
-    "inherit_routing",
-    "ip_strategy",
-    "routing",
-    "routing_revision",
-  ],
-  ServerNodeConfigValues: [
-    "dns",
-    "ip_strategy",
-    "routing",
-    "routing_mode",
-    "routing_revision",
-  ],
-  RoutingStatusView: ["known", "reporter_verified"],
+  ServerNodeConfigOverride: ["inherit_routing", "routing", "routing_revision"],
+  ServerNodeConfigValues: ["routing", "routing_mode", "routing_revision"],
+  RoutingStatusView: ["known", "reporter_verified", "synced"],
   RoutingStatusReport: ["routing_version", "received_at", "updated_at"],
 };
 
