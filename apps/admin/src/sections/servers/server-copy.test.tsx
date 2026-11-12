@@ -1,3 +1,4 @@
+import { v3 } from "./routing-fixtures.test-util";
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -90,8 +91,8 @@ vi.mock("react-i18next", () => ({
 
 const copySavedMessage =
   "Copied and verified in the panel; node application is not yet confirmed.";
-const routing: API.NodeRouting = {
-  version: 1,
+const routing: API.NodeRouting = v3({
+  version: 3,
   outbounds: [],
   rules: [
     {
@@ -104,52 +105,36 @@ const routing: API.NodeRouting = {
     },
   ],
   default_outbound_id: "direct",
-};
+});
 function fixture(local: boolean): API.GetServerNodeConfigResponse {
   const policy: API.NodeRouting = local ? routing : { ...routing, rules: [] };
   const projection: API.NodeRoutingProjection = {
     ...policy,
-    mode: local ? "ordered-v1-local" : "ordered-v1-inherited",
+    mode: local ? "local" : "inherited",
     source: local ? "server" : "global",
     source_server_id: local ? 7 : 0,
     source_revision: local ? 4 : 1,
     local_transition_revision: local ? 4 : 0,
   };
   const values: API.ServerNodeConfigValues = {
-    dns: [],
-    ip_strategy: "",
     routing: projection,
     routing_revision: 1,
-    routing_mode: local ? "local-v1" : "global-v1",
+    routing_mode: local ? "local" : "inherited",
   };
   return {
-    global: { ...values, routing_mode: "global-v1" },
+    global: { ...values, routing_mode: "inherited" },
     effective: values,
     override: {
-      inherit_dns: !local,
-      dns: local ? [{ proto: "udp", address: "1.1.1.1:53", domains: [] }] : [],
-      inherit_ip_strategy: !local,
-      ip_strategy: "",
       inherit_routing: !local,
       routing: local ? routing : null,
       routing_revision: local ? 4 : 0,
     },
-    routing_status: { known: false, reporter_verified: false },
+    routing_status: { known: false, reporter_verified: false, synced: false },
   };
 }
 let source: API.GetServerNodeConfigResponse;
 let target: API.GetServerNodeConfigResponse;
 function commit(payload: API.UpdateServerNodeConfigRequest) {
-  if (payload.inherit_dns !== undefined) {
-    target.override.inherit_dns = payload.inherit_dns;
-    target.override.dns = payload.inherit_dns ? [] : payload.dns || [];
-  }
-  if (payload.inherit_ip_strategy !== undefined) {
-    target.override.inherit_ip_strategy = payload.inherit_ip_strategy;
-    target.override.ip_strategy = payload.inherit_ip_strategy
-      ? ""
-      : payload.ip_strategy || "";
-  }
   if (payload.routing) {
     target.override.inherit_routing = false;
     target.override.routing = structuredClone(payload.routing);
@@ -196,7 +181,7 @@ afterEach(() => {
 });
 
 describe("server copy", () => {
-  it("uses the backend's data.id, copies local DNS/IP/routing while offline, and verifies readback", async () => {
+  it("uses the backend's data.id, copies local routing while offline, and verifies readback", async () => {
     render(<Servers />);
     clickCopy();
     await waitFor(() =>
@@ -228,15 +213,9 @@ describe("server copy", () => {
     expect(payload).toMatchObject({
       server_id: 42,
       routing_revision: 0,
-      inherit_dns: false,
-      inherit_ip_strategy: false,
-      ip_strategy: "",
-      dns: source.override.dns,
       routing,
     });
     expect(target.override).toMatchObject({
-      inherit_dns: false,
-      inherit_ip_strategy: false,
       inherit_routing: false,
       routing,
       routing_revision: 1,

@@ -169,9 +169,6 @@
                         "NodeSecret": []
                     }
                 ],
-                "consumes": [
-                    "application/json"
-                ],
                 "produces": [
                     "application/json",
                     "application/protobuf"
@@ -179,29 +176,12 @@
                 "tags": [
                     "node"
                 ],
-                "summary": "Get user list",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "name": "protocol",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "secret_key",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "name": "server_id",
-                        "in": "query"
-                    }
-                ],
+                "summary": "Removed: users are delivered in /v2/server/{server_id}",
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "426": {
+                        "description": "Node routing upgrade required",
                         "schema": {
-                            "$ref": "#/definitions/dto.GetServerUserListResponse"
+                            "$ref": "#/definitions/result.ResponseErrorBean"
                         }
                     }
                 }
@@ -231,18 +211,8 @@
                         "required": true
                     },
                     {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "multi",
-                        "description": "Protocols to include",
-                        "name": "protocols",
-                        "in": "query"
-                    },
-                    {
                         "type": "string",
-                        "description": "Maximum supported routing version: 1 or 2",
+                        "description": "Must be 3",
                         "name": "X-PPanel-Routing-Version",
                         "in": "header",
                         "required": true
@@ -329,24 +299,13 @@
                 }
             }
         },
-        "dto.GetServerUserListResponse": {
-            "type": "object",
-            "properties": {
-                "users": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ServerUser"
-                    }
-                }
-            }
-        },
         "dto.IdentitySnapshot": {
             "type": "object",
             "properties": {
                 "protocols": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.ProtocolUserSnapshot"
+                        "$ref": "#/definitions/dto.ProtocolIdentity"
                     }
                 },
                 "snapshot_id": {
@@ -354,22 +313,22 @@
                 }
             }
         },
-        "dto.NodeDNS": {
+        "dto.IdentityUser": {
             "type": "object",
             "properties": {
-                "address": {
-                    "type": "string"
+                "account_id": {
+                    "type": "integer"
                 },
-                "domains": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "device_limit": {
+                    "type": "integer"
                 },
-                "proto": {
-                    "type": "string"
+                "id": {
+                    "type": "integer"
                 },
-                "server_name": {
+                "speed_limit": {
+                    "type": "integer"
+                },
+                "uuid": {
                     "type": "string"
                 }
             }
@@ -429,7 +388,7 @@
                     "type": "string"
                 },
                 "ip_rules": {
-                    "description": "Must be empty in v1.",
+                    "description": "Must be empty.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -458,7 +417,7 @@
                     "type": "string"
                 },
                 "protocol_rules": {
-                    "description": "Must be empty in v1.",
+                    "description": "Must be empty.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -474,7 +433,7 @@
                     "type": "boolean"
                 },
                 "rules": {
-                    "description": "Legacy match arrays are retained for protobuf compatibility and must be empty in v1.",
+                    "description": "Legacy match arrays are retained for protobuf compatibility and must be empty.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -517,6 +476,7 @@
                     "type": "string"
                 },
                 "via_outbound_id": {
+                    "description": "ViaOutboundID names the custom outbound this one dials through.",
                     "type": "string"
                 },
                 "xhttp_extra": {
@@ -531,6 +491,7 @@
             "type": "object",
             "required": [
                 "default_outbound_id",
+                "dns",
                 "local_transition_revision",
                 "mode",
                 "outbounds",
@@ -538,13 +499,15 @@
                 "source",
                 "source_revision",
                 "source_server_id",
+                "target_ip_preference",
+                "user_defaults",
                 "version"
             ],
             "properties": {
                 "default_outbound_id": {
                     "type": "string"
                 },
-                "dns_policy": {
+                "dns": {
                     "$ref": "#/definitions/config.NodeDNSPolicy"
                 },
                 "local_transition_revision": {
@@ -574,6 +537,9 @@
                 "source_server_id": {
                     "type": "integer"
                 },
+                "target_ip_preference": {
+                    "type": "string"
+                },
                 "user_defaults": {
                     "type": "array",
                     "items": {
@@ -592,6 +558,7 @@
                 "id",
                 "kind",
                 "outbound_id",
+                "user_ids",
                 "values"
             ],
             "properties": {
@@ -926,7 +893,7 @@
                 }
             }
         },
-        "dto.ProtocolUserSnapshot": {
+        "dto.ProtocolIdentity": {
             "type": "object",
             "properties": {
                 "protocol": {
@@ -935,7 +902,7 @@
                 "users": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.ServerUser"
+                        "$ref": "#/definitions/dto.IdentityUser"
                     }
                 }
             }
@@ -943,17 +910,8 @@
         "dto.QueryServerConfigResponse": {
             "type": "object",
             "properties": {
-                "dns": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.NodeDNS"
-                    }
-                },
                 "identity_snapshot": {
                     "$ref": "#/definitions/dto.IdentitySnapshot"
-                },
-                "ip_strategy": {
-                    "type": "string"
                 },
                 "protocols": {
                     "type": "array",
@@ -1076,26 +1034,6 @@
                     "items": {
                         "$ref": "#/definitions/dto.UserTraffic"
                     }
-                }
-            }
-        },
-        "dto.ServerUser": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "integer"
-                },
-                "device_limit": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "speed_limit": {
-                    "type": "integer"
-                },
-                "uuid": {
-                    "type": "string"
                 }
             }
         },

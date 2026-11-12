@@ -1,3 +1,4 @@
+import { v3 } from "./routing-fixtures.test-util";
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -26,8 +27,8 @@ vi.mock("react-i18next", () => ({
 const ob = "ob_11111111-1111-4111-8111-111111111111";
 const rr = "rr_22222222-2222-4222-8222-222222222222";
 const rr2 = "rr_33333333-3333-4333-8333-333333333333";
-const initial: API.NodeRouting = {
-  version: 1,
+const initial: API.NodeRouting = v3({
+  version: 3,
   outbounds: [
     {
       id: ob,
@@ -69,7 +70,7 @@ const initial: API.NodeRouting = {
     },
   ],
   default_outbound_id: "direct",
-};
+});
 function Harness({
   initialValue = initial,
 }: {
@@ -115,7 +116,7 @@ describe("real ordered routing editor", () => {
       <Harness
         initialValue={{
           ...initial,
-          version: 2,
+          version: 3,
           user_defaults: [],
           rules: [],
           outbounds: [initial.outbounds[0]!, source],

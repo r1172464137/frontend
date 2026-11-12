@@ -1,3 +1,4 @@
+import { v3 } from "./routing-fixtures.test-util";
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import request from "@workspace/ui/lib/request";
@@ -14,52 +15,44 @@ import { isRoutingConflict } from "./node-routing";
 let server: Server;
 let originalBase: string | undefined;
 let captured: unknown;
-const routing: API.NodeRouting = {
-  version: 1,
+const routing: API.NodeRouting = v3({
+  version: 3,
   outbounds: [],
   rules: [],
   default_outbound_id: "direct",
-};
+});
 const globalConfig: API.NodeConfig = {
   node_secret: "secret",
   node_pull_interval: 60,
   node_push_interval: 10,
   traffic_report_threshold: 1024,
-  ip_strategy: "prefer_ipv4",
-  dns: [],
   routing,
   routing_revision: 3,
-  routing_mode: "global-v1",
+  routing_mode: "global",
   routing_capabilities: [1],
 };
 const projected: API.NodeRoutingProjection = {
   ...routing,
-  mode: "ordered-v1-inherited",
+  mode: "inherited",
   source: "global",
   source_server_id: 0,
   source_revision: 3,
   local_transition_revision: 0,
 };
 const values: API.ServerNodeConfigValues = {
-  dns: [],
-  ip_strategy: "prefer_ipv4",
   routing: projected,
   routing_revision: 3,
-  routing_mode: "global-v1",
+  routing_mode: "inherited",
 };
 const serverConfig: API.GetServerNodeConfigResponse = {
   global: values,
   effective: values,
   override: {
-    dns: [],
-    ip_strategy: "",
-    inherit_dns: true,
-    inherit_ip_strategy: true,
     inherit_routing: true,
     routing: null,
     routing_revision: 0,
   },
-  routing_status: { known: false, reporter_verified: false },
+  routing_status: { known: false, reporter_verified: false, synced: false },
 };
 function response(
   res: import("node:http").ServerResponse,
@@ -215,11 +208,9 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
   } = JSON.parse(readFileSync("../../docs/public/swagger/ppanel.json", "utf8"));
   const keys = (name: string) =>
     Object.keys(spec.definitions[name]!.properties).sort();
-  expect(keys("dto.NodeConfig")).toEqual(
-    [...Object.keys(globalConfig), "routing_downgrade"].sort()
-  );
+  expect(keys("dto.NodeConfig")).toEqual(Object.keys(globalConfig).sort());
   expect(keys("dto.GetServerNodeConfigResponse")).toEqual(
-    [...Object.keys(serverConfig), "desired_snapshot_id"].sort()
+    Object.keys(serverConfig).sort()
   );
   expect(keys("dto.ServerNodeConfigOverride")).toEqual(
     Object.keys(serverConfig.override).sort()
@@ -228,17 +219,7 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
     Object.keys(values).sort()
   );
   expect(keys("dto.UpdateServerNodeConfigRequest")).toEqual(
-    [
-      "dns",
-      "inherit_dns",
-      "inherit_ip_strategy",
-      "inherit_routing",
-      "ip_strategy",
-      "routing",
-      "routing_downgrade",
-      "routing_revision",
-      "server_id",
-    ].sort()
+    ["inherit_routing", "routing", "routing_revision", "server_id"].sort()
   );
   const routingFields = [
     "version",
@@ -246,7 +227,8 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
     "rules",
     "default_outbound_id",
     "user_defaults",
-    "dns_policy",
+    "dns",
+    "target_ip_preference",
   ];
   const identityFields = [
     "mode",
@@ -338,9 +320,11 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
     "stage",
   ]);
   expect(keys("dto.RoutingStatusView")).toEqual([
+    "desired_snapshot_id",
     "known",
     "report",
     "reporter_verified",
+    "synced",
   ]);
   expect(keys("dto.RoutingStatusReport")).toEqual([
     "conflict",
@@ -355,7 +339,7 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
     "updated_at",
   ]);
   expect(spec.definitions["config.NodeRouting"]!.properties).toMatchObject({
-    dns_policy: { $ref: "#/definitions/config.NodeDNSPolicy" },
+    dns: { $ref: "#/definitions/config.NodeDNSPolicy" },
     user_defaults: {
       type: "array",
       items: { $ref: "#/definitions/config.NodeUserDefault" },
@@ -367,7 +351,7 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
     },
   });
   expect(spec.definitions["dto.NodeRoutingPolicy"]!.properties).toMatchObject({
-    dns_policy: { $ref: "#/definitions/config.NodeDNSPolicy" },
+    dns: { $ref: "#/definitions/config.NodeDNSPolicy" },
     user_defaults: {
       type: "array",
       items: { $ref: "#/definitions/config.NodeUserDefault" },
@@ -398,12 +382,12 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
     spec.definitions["dto.RoutingReportError"]!.properties.identity
   ).toEqual({ $ref: "#/definitions/dto.RoutingCandidateIdentity" });
   for (const name of ["config.NodeRoute", "dto.NodeRoutingRule"])
-    expect(spec.definitions[name]!.properties.user_ids).toEqual({
+    expect(spec.definitions[name]!.properties.user_ids).toMatchObject({
       type: "array",
       items: { type: "integer" },
     });
   for (const name of ["config.NodeOutbound", "dto.NodeOutbound"])
-    expect(spec.definitions[name]!.properties.via_outbound_id).toEqual({
+    expect(spec.definitions[name]!.properties.via_outbound_id).toMatchObject({
       type: "string",
     });
   expect(
@@ -412,18 +396,16 @@ it("bundled backend OpenAPI matches the cutover-only management fields", () => {
   expect(
     spec.definitions["dto.RoutingCandidateIdentity"]!.properties.snapshot_id
   ).toEqual({ type: "string" });
-  expect(
-    spec.definitions["dto.GetServerNodeConfigResponse"]!.properties
-      .desired_snapshot_id
-  ).toEqual({ type: "string" });
-  for (const name of ["dto.NodeConfig", "dto.UpdateServerNodeConfigRequest"]) {
-    expect(spec.definitions[name]!.properties.routing_downgrade).toEqual({
-      type: "boolean",
-    });
-    expect(spec.definitions[name]!.required || []).not.toContain(
-      "routing_downgrade"
-    );
-  }
+  // Format 3: the desired snapshot and the sync decision live in the
+  // routing status; there is no downgrade flag.
+  expect(spec.definitions["dto.RoutingStatusView"]!.properties).toMatchObject({
+    desired_snapshot_id: { type: "string" },
+    synced: { type: "boolean" },
+  });
+  for (const name of ["dto.NodeConfig", "dto.UpdateServerNodeConfigRequest"])
+    expect(
+      spec.definitions[name]!.properties.routing_downgrade
+    ).toBeUndefined();
   expect(keys("dto.CreateServerResponse")).toEqual(["id"]);
   expect(spec.paths["/v1/admin/system/node_config/preview"]).toBeUndefined();
   expect(spec.paths["/v1/admin/server/node_config/preview"]).toBeUndefined();

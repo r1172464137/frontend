@@ -146,7 +146,7 @@
     "dns_move_up": "Move resolver {{number}} up",
     "dns_move_down": "Move resolver {{number}} down",
     "dns_rule": "Resolver rule",
-    "dns_protocol": "Protocol",
+    "dns_protocol": "Resolver protocol",
     "dns_address": "Resolver address",
     "bootstrap_ip": "Bootstrap IP (hostname resolver)",
     "dns_domains": "Domains (one per line)",

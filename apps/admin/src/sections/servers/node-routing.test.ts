@@ -1,11 +1,10 @@
+import { v3 } from "./routing-fixtures.test-util";
 import { describe, expect, it } from "vitest";
 import {
   MAX_ROUTING_BYTES,
   moveRoutingRule,
   nodeRoutingSchema,
   outboundReferences,
-  ROUTING_STATUS_TTL_MS,
-  routingApplicationState,
   routingContentFromProjection,
   routingIdentityFromProjection,
   routingReadbackMatches,
@@ -17,8 +16,8 @@ const ob = "ob_11111111-1111-4111-8111-111111111111";
 const rr = "rr_22222222-2222-4222-8222-222222222222";
 const rr2 = "rr_33333333-3333-4333-8333-333333333333";
 function policy(): API.NodeRouting {
-  return {
-    version: 1,
+  return v3({
+    version: 3,
     outbounds: [
       {
         id: ob,
@@ -58,31 +57,15 @@ function policy(): API.NodeRouting {
       },
     ],
     default_outbound_id: "direct",
-  };
+  });
 }
 const identity: API.RoutingIdentity = {
-  mode: "ordered-v1-local",
+  mode: "local",
   source: "server",
   source_server_id: 7,
   source_revision: 8,
   local_transition_revision: 8,
 };
-const instance = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const now = 1_700_000_000_000;
-function status(): API.RoutingStatusView {
-  return {
-    known: true,
-    reporter_verified: true,
-    report: {
-      routing_version: 1,
-      instance_id: instance,
-      received_at: now / 1000,
-      updated_at: now / 1000,
-      routing_applied: identity,
-    },
-  };
-}
-
 describe("cutover ordered routing", () => {
   it("preserves connection fields, enabled=false and empty-array presence without normalization", () => {
     const input = policy();
@@ -150,7 +133,7 @@ describe("cutover ordered routing", () => {
     };
     const input: API.NodeRouting = {
       ...original,
-      version: 2,
+      version: 3,
       user_defaults: [],
       outbounds: [...original.outbounds, second],
     };
@@ -173,7 +156,7 @@ describe("cutover ordered routing", () => {
     };
     const input: API.NodeRouting = {
       ...original,
-      version: 2,
+      version: 3,
       user_defaults: [],
       outbounds: [first, second],
     };
@@ -223,7 +206,7 @@ describe("cutover ordered routing", () => {
       const original = policy();
       const input: API.NodeRouting = {
         ...original,
-        version: 2,
+        version: 3,
         user_defaults: [],
         outbounds: [
           {
@@ -308,7 +291,7 @@ describe("cutover ordered routing", () => {
   it("compares backend-canonical v2 account and DNS values without changing submitted policy", () => {
     const input: API.NodeRouting = {
       ...policy(),
-      version: 2,
+      version: 3,
       rules: [
         { ...policy().rules[0]!, user_ids: [21, 1, 21] },
         policy().rules[1]!,
@@ -317,7 +300,7 @@ describe("cutover ordered routing", () => {
         { user_id: 21, outbound_id: ob },
         { user_id: 1, outbound_id: "direct" },
       ],
-      dns_policy: {
+      dns: {
         query_strategy: "UseIP",
         resolvers: [
           {
@@ -349,9 +332,9 @@ describe("cutover ordered routing", () => {
     const observed = structuredClone(input);
     observed.rules[0]!.user_ids = [1, 21];
     observed.user_defaults!.reverse();
-    observed.dns_policy!.resolvers[0]!.address = "dns.example.com.:53";
-    observed.dns_policy!.resolvers[1]!.address = "[2001:db8::53]:53";
-    observed.dns_policy!.resolvers[1]!.bootstrap_ip = "2001:db8::1";
+    observed.dns!.resolvers[0]!.address = "dns.example.com.:53";
+    observed.dns!.resolvers[1]!.address = "[2001:db8::53]:53";
+    observed.dns!.resolvers[1]!.bootstrap_ip = "2001:db8::1";
     expect(routingReadbackMatches(input, observed)).toBe(true);
     expect(input).toEqual(original);
     const differentUser = structuredClone(observed);
@@ -364,117 +347,17 @@ describe("cutover ordered routing", () => {
     differentAccount.user_defaults![0]!.user_id = 2;
     expect(routingReadbackMatches(input, differentAccount)).toBe(false);
     const differentResolver = structuredClone(observed);
-    differentResolver.dns_policy!.resolvers[0]!.address = "dns.example.com:53";
+    differentResolver.dns!.resolvers[0]!.address = "dns.example.com:53";
     expect(routingReadbackMatches(input, differentResolver)).toBe(false);
     const differentBootstrap = structuredClone(observed);
-    differentBootstrap.dns_policy!.resolvers[1]!.bootstrap_ip = "2001:db8::2";
+    differentBootstrap.dns!.resolvers[1]!.bootstrap_ip = "2001:db8::2";
     expect(routingReadbackMatches(input, differentBootstrap)).toBe(false);
     const differentURL = structuredClone(observed);
-    differentURL.dns_policy!.resolvers[2]!.address =
+    differentURL.dns!.resolvers[2]!.address =
       "https://dns.example.com/dns-query";
     expect(routingReadbackMatches(input, differentURL)).toBe(false);
     const reordered = structuredClone(observed);
     reordered.rules.reverse();
     expect(routingReadbackMatches(input, reordered)).toBe(false);
-  });
-  it("classifies the backend-verified status using exact identity and content receipt TTL", () => {
-    const view = status();
-    expect(routingApplicationState(view, identity, now)).toBe("applied");
-    expect(
-      routingApplicationState(view, identity, now + ROUTING_STATUS_TTL_MS)
-    ).toBe("unknown");
-    expect(
-      routingApplicationState({ ...view, known: false }, identity, now)
-    ).toBe("unknown");
-    expect(
-      routingApplicationState(
-        { ...view, reporter_verified: false },
-        identity,
-        now
-      )
-    ).toBe("unknown");
-    expect(
-      routingApplicationState(
-        { ...view, known: false, report: { ...view.report!, conflict: true } },
-        identity,
-        now
-      )
-    ).toBe("unknown");
-    for (const updatedAt of [0, 1, now / 1000 - 100_000]) {
-      expect(
-        routingApplicationState(
-          {
-            ...view,
-            report: {
-              ...view.report!,
-              updated_at: updatedAt,
-              routing_sequence: 9_007_199_254_740_992,
-              liveness_at: now / 1000 + 10,
-            },
-          },
-          identity,
-          now
-        )
-      ).toBe("applied");
-    }
-    expect(
-      routingApplicationState(
-        {
-          ...view,
-          report: {
-            ...view.report!,
-            received_at: now / 1000 - ROUTING_STATUS_TTL_MS / 1000,
-            liveness_at: now / 1000,
-          },
-        },
-        identity,
-        now
-      )
-    ).toBe("unknown");
-    expect(
-      routingApplicationState(view, { ...identity, source_revision: 9 }, now)
-    ).toBe("unknown");
-    const malformed = { ...identity, mode: "ordered-v2" };
-    expect(
-      routingApplicationState(
-        { ...view, report: { ...view.report!, routing_applied: malformed } },
-        malformed,
-        now
-      )
-    ).toBe("unknown");
-    const inherited: API.RoutingIdentity = {
-      mode: "ordered-v1-inherited",
-      source: "global",
-      source_server_id: 0,
-      source_revision: 3,
-      local_transition_revision: 0,
-    };
-    expect(
-      routingApplicationState(
-        { ...view, report: { ...view.report!, routing_applied: inherited } },
-        inherited,
-        now
-      )
-    ).toBe("applied");
-    const pending = {
-      ...view,
-      report: { ...view.report!, routing_pending: identity },
-    };
-    expect(routingApplicationState(pending, identity, now)).toBe("pending");
-    const failed = {
-      ...pending,
-      report: {
-        ...pending.report,
-        routing_error: { identity, stage: "build", message: "failed" },
-      },
-    };
-    expect(routingApplicationState(failed, identity, now)).toBe("failed");
-    expect(
-      routingApplicationState(
-        { known: false, reporter_verified: false },
-        identity,
-        now
-      )
-    ).toBe("unknown");
   });
 });

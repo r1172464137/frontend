@@ -1,3 +1,4 @@
+import { v3 } from "./routing-fixtures.test-util";
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -12,7 +13,6 @@ import { NodeRoutingEditor } from "./node-routing-editor";
 import { RoutingDNS } from "./routing-dns";
 import {
   outboundReferences,
-  routingApplicationState,
   routingContentFromProjection,
   routingReadbackMatches,
   validateNodeRouting,
@@ -56,8 +56,8 @@ vi.mock("@workspace/ui/services/admin/admin", () => ({ getUserList: list }));
 const a = "ob_11111111-1111-4111-8111-111111111111";
 const b = "ob_22222222-2222-4222-8222-222222222222";
 const dns = "dns_33333333-3333-4333-8333-333333333333";
-const base: API.NodeRouting = {
-  version: 1,
+const base: API.NodeRouting = v3({
+  version: 3,
   outbounds: [a, b].map((id, index) => ({
     id,
     name: index ? "B" : "A",
@@ -80,7 +80,7 @@ const base: API.NodeRouting = {
     },
   ],
   default_outbound_id: "direct",
-};
+});
 function Harness() {
   const [value, setValue] = useState(base);
   return (
@@ -119,7 +119,7 @@ it("selects account IDs across pages, scopes a rule and retains the existing mat
   fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
   fireEvent.click(await within(dialog).findByLabelText(/last@example.test/));
   fireEvent.click(within(dialog).getByRole("button", { name: "Apply rule" }));
-  expect(policy().version).toBe(2);
+  expect(policy().version).toBe(3);
   expect(policy().rules[0]).toMatchObject({
     user_ids: [21],
     values: ["geosite:google-cn"],
@@ -141,9 +141,10 @@ it("writes user defaults, front hop and ordered DNS without changing existing ru
   fireEvent.change(screen.getByLabelText("Connect through outbound"), {
     target: { value: a },
   });
-  fireEvent.click(
-    screen.getByLabelText("Use explicit DNS policy (otherwise use legacy DNS)")
-  );
+  // The policy starts as the system default resolver; make it a UDP one.
+  fireEvent.change(screen.getByLabelText("Resolver protocol"), {
+    target: { value: "udp" },
+  });
   fireEvent.change(screen.getByLabelText("Resolver address"), {
     target: { value: "192.0.2.53:53" },
   });
@@ -151,10 +152,10 @@ it("writes user defaults, front hop and ordered DNS without changing existing ru
     target: { value: b },
   });
   expect(policy()).toMatchObject({
-    version: 2,
+    version: 3,
     user_defaults: [{ user_id: 1, outbound_id: b }],
     outbounds: [{ id: a }, { id: b, via_outbound_id: a }],
-    dns_policy: {
+    dns: {
       query_strategy: "UseIP",
       resolvers: [
         {
@@ -174,9 +175,10 @@ it("writes user defaults, front hop and ordered DNS without changing existing ru
 
 it("preserves resolver bootstrap across UDP, TCP and HTTPS without restricting hostname outbounds", () => {
   render(<Harness />);
-  fireEvent.click(
-    screen.getByLabelText("Use explicit DNS policy (otherwise use legacy DNS)")
-  );
+  // The policy starts as the system default resolver; make it a UDP one.
+  fireEvent.change(screen.getByLabelText("Resolver protocol"), {
+    target: { value: "udp" },
+  });
   fireEvent.change(screen.getByLabelText("Resolver address"), {
     target: { value: "dns.example.test:53" },
   });
@@ -184,7 +186,7 @@ it("preserves resolver bootstrap across UDP, TCP and HTTPS without restricting h
     target: { value: "192.0.2.53" },
   });
   for (const protocol of ["udp", "tcp", "https", "udp"]) {
-    fireEvent.change(screen.getByLabelText("Protocol"), {
+    fireEvent.change(screen.getByLabelText("Resolver protocol"), {
       target: { value: protocol },
     });
     fireEvent.change(screen.getByLabelText("Resolver address"), {
@@ -196,7 +198,7 @@ it("preserves resolver bootstrap across UDP, TCP and HTTPS without restricting h
       },
     });
     const value = policy();
-    expect(value.dns_policy?.resolvers[0]).toMatchObject({
+    expect(value.dns?.resolvers[0]).toMatchObject({
       protocol,
       bootstrap_ip: "192.0.2.53",
     });
@@ -240,9 +242,9 @@ it("keeps multiline DNS drafts while applying external resolver readback and lab
   };
   const initial: API.NodeRouting = {
     ...base,
-    version: 2,
+    version: 3,
     user_defaults: [],
-    dns_policy: {
+    dns: {
       query_strategy: "UseIP",
       resolvers: [first, second, fallback],
     },
@@ -257,8 +259,8 @@ it("keeps multiline DNS drafts while applying external resolver readback and lab
           onClick={() =>
             setValue({
               ...initial,
-              dns_policy: {
-                ...initial.dns_policy!,
+              dns: {
+                ...initial.dns!,
                 resolvers: [
                   { ...first, domains: ["domain:canonical.example"] },
                   second,
@@ -270,9 +272,7 @@ it("keeps multiline DNS drafts while applying external resolver readback and lab
         >
           Read back
         </button>
-        <output data-testid="dns-value">
-          {JSON.stringify(value.dns_policy)}
-        </output>
+        <output data-testid="dns-value">{JSON.stringify(value.dns)}</output>
       </>
     );
   }
@@ -305,13 +305,13 @@ it("keeps multiline DNS drafts while applying external resolver readback and lab
 it("rejects cycles, dangling dependencies and invalid DNS default; reads v1 and v2 unchanged", () => {
   const v2: API.NodeRouting = {
     ...base,
-    version: 2,
+    version: 3,
     user_defaults: [{ user_id: 21, outbound_id: a }],
     outbounds: [
       { ...base.outbounds[0]!, via_outbound_id: b },
       { ...base.outbounds[1]!, via_outbound_id: a },
     ],
-    dns_policy: {
+    dns: {
       query_strategy: "UseIP",
       resolvers: [
         {
@@ -341,44 +341,4 @@ it("rejects cycles, dangling dependencies and invalid DNS default; reads v1 and 
   expect(routingContentFromProjection(base)).toEqual(base);
   expect(routingContentFromProjection(v2)).toEqual(v2);
   expect(routingReadbackMatches(v2, v2)).toBe(true);
-});
-
-it("requires matching desired snapshot as well as routing identity for v2", () => {
-  const identity: API.RoutingIdentity = {
-    mode: "ordered-v1-local",
-    source: "server",
-    source_server_id: 7,
-    source_revision: 3,
-    local_transition_revision: 3,
-    snapshot_id: "a",
-  };
-  const now = Date.now();
-  const status: API.RoutingStatusView = {
-    known: true,
-    reporter_verified: true,
-    desired_snapshot_id: "b",
-    report: {
-      routing_version: 2,
-      received_at: Math.floor(now / 1000),
-      updated_at: 0,
-      routing_applied: identity,
-    },
-  };
-  expect(routingApplicationState(status, identity, now, 2)).toBe("unknown");
-  expect(
-    routingApplicationState(
-      { ...status, desired_snapshot_id: "a" },
-      identity,
-      now,
-      2
-    )
-  ).toBe("applied");
-  expect(
-    routingApplicationState(
-      { ...status, desired_snapshot_id: null },
-      identity,
-      now,
-      2
-    )
-  ).toBe("unknown");
 });

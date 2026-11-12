@@ -27,7 +27,8 @@ export function RoutingUsers({
       getUserList({ page, size: 20, search })
         .then(({ data }) => {
           if (active) {
-            if (data.data) setResult(data.data); else setError(true);
+            if (data.data) setResult(data.data);
+            else setError(true);
           }
         })
         .catch(() => {

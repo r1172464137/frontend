@@ -12,7 +12,11 @@ export async function getInterfaceConfig(): Promise<InterfaceConfig> {
   const response = await getSystemInterfaceConfig({ skipErrorHandler: true });
   const data = response.data.data;
   if (
-    !((data &&Array.isArray(data.hiddenMenuIds) ) &&data.hiddenMenuIds.every((id) => typeof id === "string"))
+    !(
+      data &&
+      Array.isArray(data.hiddenMenuIds) &&
+      data.hiddenMenuIds.every((id) => typeof id === "string")
+    )
   )
     throw new Error("Invalid interface configuration");
   return data;

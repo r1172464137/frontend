@@ -4873,7 +4873,7 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "Get Interface Config",
+                "summary": "Get admin interface config",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4910,7 +4910,7 @@
                 "tags": [
                     "admin"
                 ],
-                "summary": "Update Interface Config",
+                "summary": "Update admin interface config",
                 "parameters": [
                     {
                         "description": "Request parameters",
@@ -7583,6 +7583,7 @@
                     "type": "string"
                 },
                 "via_outbound_id": {
+                    "description": "ViaOutboundID names the custom outbound this one dials through\n(node -\u003e via -\u003e this -\u003e target). Empty means a direct connection.",
                     "type": "string"
                 },
                 "xhttp_extra": {
@@ -7600,6 +7601,7 @@
                 "id",
                 "kind",
                 "outbound_id",
+                "user_ids",
                 "values"
             ],
             "properties": {
@@ -7619,6 +7621,7 @@
                     "type": "string"
                 },
                 "user_ids": {
+                    "description": "UserIDs limits the rule to these accounts (user.id); empty means all.",
                     "type": "array",
                     "items": {
                         "type": "integer"
@@ -7636,15 +7639,18 @@
             "type": "object",
             "required": [
                 "default_outbound_id",
+                "dns",
                 "outbounds",
                 "rules",
+                "target_ip_preference",
+                "user_defaults",
                 "version"
             ],
             "properties": {
                 "default_outbound_id": {
                     "type": "string"
                 },
-                "dns_policy": {
+                "dns": {
                     "$ref": "#/definitions/config.NodeDNSPolicy"
                 },
                 "outbounds": {
@@ -7658,6 +7664,9 @@
                     "items": {
                         "$ref": "#/definitions/config.NodeRoute"
                     }
+                },
+                "target_ip_preference": {
+                    "type": "string"
                 },
                 "user_defaults": {
                     "type": "array",
@@ -9280,9 +9289,6 @@
         "dto.GetServerNodeConfigResponse": {
             "type": "object",
             "properties": {
-                "desired_snapshot_id": {
-                    "type": "string"
-                },
                 "effective": {
                     "$ref": "#/definitions/dto.ServerNodeConfigValues"
                 },
@@ -9744,15 +9750,6 @@
         "dto.NodeConfig": {
             "type": "object",
             "properties": {
-                "dns": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.NodeDNS"
-                    }
-                },
-                "ip_strategy": {
-                    "type": "string"
-                },
                 "node_pull_interval": {
                     "type": "integer"
                 },
@@ -9771,9 +9768,6 @@
                         "type": "integer"
                     }
                 },
-                "routing_downgrade": {
-                    "type": "boolean"
-                },
                 "routing_mode": {
                     "type": "string"
                 },
@@ -9782,26 +9776,6 @@
                 },
                 "traffic_report_threshold": {
                     "type": "integer"
-                }
-            }
-        },
-        "dto.NodeDNS": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "domains": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "proto": {
-                    "type": "string"
-                },
-                "server_name": {
-                    "type": "string"
                 }
             }
         },
@@ -9860,7 +9834,7 @@
                     "type": "string"
                 },
                 "ip_rules": {
-                    "description": "Must be empty in v1.",
+                    "description": "Must be empty.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -9889,7 +9863,7 @@
                     "type": "string"
                 },
                 "protocol_rules": {
-                    "description": "Must be empty in v1.",
+                    "description": "Must be empty.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -9905,7 +9879,7 @@
                     "type": "boolean"
                 },
                 "rules": {
-                    "description": "Legacy match arrays are retained for protobuf compatibility and must be empty in v1.",
+                    "description": "Legacy match arrays are retained for protobuf compatibility and must be empty.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -9948,6 +9922,7 @@
                     "type": "string"
                 },
                 "via_outbound_id": {
+                    "description": "ViaOutboundID names the custom outbound this one dials through.",
                     "type": "string"
                 },
                 "xhttp_extra": {
@@ -9962,6 +9937,7 @@
             "type": "object",
             "required": [
                 "default_outbound_id",
+                "dns",
                 "local_transition_revision",
                 "mode",
                 "outbounds",
@@ -9969,13 +9945,15 @@
                 "source",
                 "source_revision",
                 "source_server_id",
+                "target_ip_preference",
+                "user_defaults",
                 "version"
             ],
             "properties": {
                 "default_outbound_id": {
                     "type": "string"
                 },
-                "dns_policy": {
+                "dns": {
                     "$ref": "#/definitions/config.NodeDNSPolicy"
                 },
                 "local_transition_revision": {
@@ -10005,6 +9983,9 @@
                 "source_server_id": {
                     "type": "integer"
                 },
+                "target_ip_preference": {
+                    "type": "string"
+                },
                 "user_defaults": {
                     "type": "array",
                     "items": {
@@ -10023,6 +10004,7 @@
                 "id",
                 "kind",
                 "outbound_id",
+                "user_ids",
                 "values"
             ],
             "properties": {
@@ -11111,6 +11093,10 @@
         "dto.RoutingStatusView": {
             "type": "object",
             "properties": {
+                "desired_snapshot_id": {
+                    "description": "DesiredSnapshotID is the snapshot the node should be running, computed\nread-only from the database; null when it cannot be computed.",
+                    "type": "string"
+                },
                 "known": {
                     "type": "boolean"
                 },
@@ -11118,6 +11104,10 @@
                     "$ref": "#/definitions/dto.RoutingStatusReport"
                 },
                 "reporter_verified": {
+                    "type": "boolean"
+                },
+                "synced": {
+                    "description": "Synced is true only when the verified applied identity equals desired.",
                     "type": "boolean"
                 }
             }
@@ -11166,23 +11156,8 @@
         "dto.ServerNodeConfigOverride": {
             "type": "object",
             "properties": {
-                "dns": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.NodeDNS"
-                    }
-                },
-                "inherit_dns": {
-                    "type": "boolean"
-                },
-                "inherit_ip_strategy": {
-                    "type": "boolean"
-                },
                 "inherit_routing": {
                     "type": "boolean"
-                },
-                "ip_strategy": {
-                    "type": "string"
                 },
                 "routing": {
                     "$ref": "#/definitions/config.NodeRouting"
@@ -11195,15 +11170,6 @@
         "dto.ServerNodeConfigValues": {
             "type": "object",
             "properties": {
-                "dns": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.NodeDNS"
-                    }
-                },
-                "ip_strategy": {
-                    "type": "string"
-                },
                 "routing": {
                     "$ref": "#/definitions/dto.NodeRoutingPolicy"
                 },
@@ -12203,29 +12169,11 @@
                 "server_id"
             ],
             "properties": {
-                "dns": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.NodeDNS"
-                    }
-                },
-                "inherit_dns": {
-                    "type": "boolean"
-                },
-                "inherit_ip_strategy": {
-                    "type": "boolean"
-                },
                 "inherit_routing": {
                     "type": "boolean"
                 },
-                "ip_strategy": {
-                    "type": "string"
-                },
                 "routing": {
                     "$ref": "#/definitions/config.NodeRouting"
-                },
-                "routing_downgrade": {
-                    "type": "boolean"
                 },
                 "routing_revision": {
                     "type": "integer"

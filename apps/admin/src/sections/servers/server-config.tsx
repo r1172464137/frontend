@@ -256,7 +256,7 @@ export default function ServerConfig() {
     <Sheet
       onOpenChange={(nextOpen) => {
         if (!nextOpen && saving) return;
-        if (!((nextOpen || saveError ) || conflict)) holdDraft.current = false;
+        if (!(nextOpen || saveError || conflict)) holdDraft.current = false;
         if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
           holdDraft.current = false;
           resetConfig(queryConfig);

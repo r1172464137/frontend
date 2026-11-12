@@ -1,12 +1,7 @@
+import { v3 } from "./routing-fixtures.test-util";
 // @vitest-environment jsdom
 
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ServerNodeConfig from "./server-node-config";
 
@@ -16,42 +11,34 @@ const mocks = vi.hoisted(() => ({
   useQuery: vi.fn(),
 }));
 
-const policy: API.NodeRoutingProjection = {
-  version: 1,
+const policy = v3({
+  version: 3,
   outbounds: [],
   rules: [],
   default_outbound_id: "direct",
-  mode: "ordered-v1-inherited",
+  mode: "inherited",
   source: "global",
   source_server_id: 0,
   source_revision: 3,
   local_transition_revision: 0,
-};
+}) as API.NodeRoutingProjection;
 const config: API.GetServerNodeConfigResponse = {
   effective: {
-    dns: [],
-    ip_strategy: "prefer_ipv6",
     routing: policy,
     routing_revision: 3,
-    routing_mode: "global-v1",
+    routing_mode: "inherited",
   },
   global: {
-    dns: [],
-    ip_strategy: "prefer_ipv6",
     routing: policy,
     routing_revision: 3,
-    routing_mode: "global-v1",
+    routing_mode: "inherited",
   },
   override: {
-    dns: [],
-    inherit_dns: true,
-    inherit_ip_strategy: true,
-    ip_strategy: "prefer_ipv4",
     inherit_routing: true,
     routing: null,
     routing_revision: 0,
   },
-  routing_status: { known: false, reporter_verified: false },
+  routing_status: { known: false, reporter_verified: false, synced: false },
 };
 
 vi.mock("@tanstack/react-query", () => ({
@@ -125,164 +112,6 @@ afterEach(() => {
 });
 
 describe("server node configuration", () => {
-  it("shows inherited values and only enables save after an override changes", async () => {
-    mocks.refetch.mockResolvedValue({
-      data: {
-        serverId: server.id,
-        config: {
-          ...config,
-          override: {
-            ...config.override,
-            inherit_ip_strategy: false,
-            ip_strategy: "prefer_ipv6",
-          },
-        },
-      },
-    });
-    render(<ServerNodeConfig server={server} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Node Config" }));
-
-    expect(
-      screen.getByRole("heading", { name: "Node configuration overrides" })
-    ).toBeTruthy();
-    expect(screen.getAllByText("Using global configuration").length).toBe(2);
-    expect(screen.getByText("Current global value: Prefer IPv6")).toBeTruthy();
-
-    const save = screen.getByRole("button", { name: "Save" });
-    expect((save as HTMLButtonElement).disabled).toBe(true);
-
-    fireEvent.click(
-      screen.getByRole("switch", { name: "Use global IP strategy" })
-    );
-    expect((save as HTMLButtonElement).disabled).toBe(false);
-
-    fireEvent.click(save);
-
-    await waitFor(() => {
-      expect(mocks.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          inherit_ip_strategy: false,
-          ip_strategy: "prefer_ipv6",
-          server_id: 7,
-        }),
-        { skipErrorHandler: true }
-      );
-    });
-    const payload = mocks.updateConfig.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
-    for (const field of [
-      "routing",
-      "routing_revision",
-      "inherit_routing",
-      "block",
-      "outbound",
-      "inherit_block",
-      "inherit_outbound",
-    ])
-      expect(Object.hasOwn(payload, field)).toBe(false);
-    await waitFor(() => expect(mocks.refetch).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("No unsaved changes")).toBeTruthy();
-    expect(
-      screen
-        .getByRole("switch", { name: "Use global IP strategy" })
-        .getAttribute("data-state")
-    ).toBe("unchecked");
-    expect(
-      screen
-        .getByRole("switch", { name: "Use global DNS configuration" })
-        .getAttribute("data-state")
-    ).toBe("checked");
-  });
-
-  it("retains the real DNS override editor and sends only non-routing fields", async () => {
-    render(<ServerNodeConfig server={server} />);
-    fireEvent.click(screen.getByRole("button", { name: "Node Config" }));
-    fireEvent.click(
-      screen.getByRole("switch", { name: "Use global DNS configuration" })
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Add UDP resolver" }));
-    fireEvent.change(screen.getByPlaceholderText("1.1.1.1:53"), {
-      target: { value: "1.1.1.1:53" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("One domain rule per line"), {
-      target: { value: "geosite:cn\nfull:example.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(mocks.updateConfig).toHaveBeenCalledTimes(1));
-    const payload = mocks.updateConfig.mock
-      .calls[0]![0] as API.UpdateServerNodeConfigRequest;
-    expect(payload).toMatchObject({
-      inherit_dns: false,
-      dns: [
-        {
-          proto: "udp",
-          address: "1.1.1.1:53",
-          server_name: "",
-          domains: ["geosite:cn", "full:example.com"],
-        },
-      ],
-    });
-    expect(Object.hasOwn(payload, "routing")).toBe(false);
-    expect(Object.hasOwn(payload, "routing_revision")).toBe(false);
-    // The fixture readback intentionally ignores the write; do not report success.
-    expect(await screen.findByText(/readback did not confirm it/)).toBeTruthy();
-  });
-  it("requires a DNS address before saving an override", async () => {
-    render(<ServerNodeConfig server={server} />);
-    fireEvent.click(screen.getByRole("button", { name: "Node Config" }));
-    fireEvent.click(
-      screen.getByRole("switch", { name: "Use global DNS configuration" })
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Add UDP resolver" }));
-    const routingTab = screen.getByRole("tab", { name: "Ordered routing" });
-    fireEvent.mouseDown(routingTab);
-    fireEvent.click(routingTab);
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(
-      await screen.findByText(
-        "Check the UDP resolver addresses and domain rules before saving."
-      )
-    ).toBeTruthy();
-    expect(mocks.updateConfig).not.toHaveBeenCalled();
-  });
-  it("blocks invalid DNS domain regexps and preserves the multi-line draft until corrected", async () => {
-    render(<ServerNodeConfig server={server} />);
-    fireEvent.click(screen.getByRole("button", { name: "Node Config" }));
-    fireEvent.click(
-      screen.getByRole("switch", { name: "Use global DNS configuration" })
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Add UDP resolver" }));
-    fireEvent.change(screen.getByLabelText("Resolver address"), {
-      target: { value: "1.1.1.1:53" },
-    });
-    const domains = screen.getByLabelText(
-      "Domain rules"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(domains, { target: { value: "geosite:cn\n\nregexp:(" } });
-    expect(
-      screen.getByText(/Line 3: the regular expression is invalid/)
-    ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(
-      await screen.findByText(
-        "Check the UDP resolver addresses and domain rules before saving."
-      )
-    ).toBeTruthy();
-    expect(mocks.updateConfig).not.toHaveBeenCalled();
-    expect(domains.value).toBe("geosite:cn\n\nregexp:(");
-    fireEvent.change(domains, {
-      target: { value: "geosite:cn\n\nregexp:^example\\.com$\n" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(mocks.updateConfig).toHaveBeenCalledTimes(1));
-    expect(mocks.updateConfig.mock.calls[0]![0].dns[0].domains).toEqual([
-      "geosite:cn",
-      "regexp:^example\\.com$",
-    ]);
-  });
   it("blocks editing and offers a retry when loading fails", () => {
     mocks.useQuery.mockReturnValue({
       data: undefined,

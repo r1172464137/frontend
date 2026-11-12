@@ -194,7 +194,7 @@ export function validateNodeRouting(value: unknown): RoutingIssue[] {
       raw.tag &&
       raw.tag !== "Default" &&
       raw.tag !== "block" &&
-      (!(rawTarget && custom.has(rawTarget)))
+      !(rawTarget && custom.has(rawTarget))
     )
       add("unknownOutbound", `outbounds.${outbound.id}.stream_settings`);
     links.set(

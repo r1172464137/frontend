@@ -6,20 +6,26 @@ import { RoutingStatus } from "./routing-status";
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (_key: string, fallback: string) => fallback }),
 }));
+const desired = "d".repeat(64);
 const id: API.RoutingIdentity = {
-  mode: "ordered-v1-local",
+  mode: "local",
   source: "server",
   source_server_id: 7,
   source_revision: 3,
   local_transition_revision: 3,
+  snapshot_id: desired,
 };
 const instance = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-function report(): API.RoutingStatusView {
+// The backend decides `synced` (applied identity equals the desired
+// snapshot in every field); the page only adds freshness.
+function report(synced = true): API.RoutingStatusView {
   return {
     known: true,
     reporter_verified: true,
+    desired_snapshot_id: desired,
+    synced,
     report: {
-      routing_version: 1,
+      routing_version: 3,
       routing_sequence: Number("9007199254740993"),
       instance_id: instance,
       received_at: Math.floor(Date.now() / 1000),
@@ -34,11 +40,10 @@ afterEach(() => {
 });
 
 describe("backend routing_status", () => {
-  it("displays pending and failure only for the exact desired identity", () => {
-    const current = report();
+  it("displays pending and failure only for the desired snapshot", () => {
+    const current = report(false);
     const view = render(
       <RoutingStatus
-        expected={id}
         onRefresh={vi.fn()}
         status={{
           ...current,
@@ -49,7 +54,6 @@ describe("backend routing_status", () => {
     expect(screen.getByText("Pending node application")).toBeTruthy();
     view.rerender(
       <RoutingStatus
-        expected={id}
         onRefresh={vi.fn()}
         status={{
           ...current,
@@ -68,31 +72,34 @@ describe("backend routing_status", () => {
     expect(
       screen.getByText("build: candidate failed during build")
     ).toBeTruthy();
+    // Same revision, different users: neither applied nor pending.
     view.rerender(
       <RoutingStatus
-        expected={{ ...id, source_revision: 4 }}
         onRefresh={vi.fn()}
-        status={current}
+        status={{
+          ...current,
+          report: {
+            ...current.report!,
+            routing_pending: { ...id, snapshot_id: "e".repeat(64) },
+          },
+        }}
       />
     );
     expect(screen.getByText("Node application status unknown")).toBeTruthy();
   });
-  it("expires a known instance receipt to unknown while the sheet stays open", () => {
+  it("expires a synced receipt to unknown while the sheet stays open", () => {
     vi.useFakeTimers();
-    render(
-      <RoutingStatus expected={id} onRefresh={vi.fn()} status={report()} />
-    );
+    render(<RoutingStatus onRefresh={vi.fn()} status={report()} />);
     expect(screen.getByText("Applied by node")).toBeTruthy();
     act(() => {
       vi.advanceTimersByTime(3 * 60 * 1000 + 1000);
     });
     expect(screen.getByText("Node application status unknown")).toBeTruthy();
   });
-  it("shows matching applied receipts despite zero or backward node updated_at", () => {
+  it("shows synced receipts despite zero or backward node updated_at", () => {
     const current = report();
-    const view = render(
+    render(
       <RoutingStatus
-        expected={id}
         onRefresh={vi.fn()}
         status={{
           ...current,
@@ -105,31 +112,18 @@ describe("backend routing_status", () => {
       />
     );
     expect(screen.getByText("Applied by node")).toBeTruthy();
-    view.rerender(
-      <RoutingStatus
-        expected={id}
-        onRefresh={vi.fn()}
-        status={{
-          ...current,
-          report: { ...current.report!, updated_at: 1, routing_pending: id },
-        }}
-      />
-    );
-    expect(screen.getByText("Pending node application")).toBeTruthy();
   });
   it("shows unknown for multi-instance conflict and unidentified or old reporters", () => {
     const current = report();
     const view = render(
       <RoutingStatus
-        expected={id}
         onRefresh={vi.fn()}
-        status={{ known: false, reporter_verified: false }}
+        status={{ known: false, reporter_verified: false, synced: false }}
       />
     );
     expect(screen.getByText("Node application status unknown")).toBeTruthy();
     view.rerender(
       <RoutingStatus
-        expected={id}
         onRefresh={vi.fn()}
         status={{
           ...current,
@@ -141,7 +135,6 @@ describe("backend routing_status", () => {
     expect(screen.getByText("Node application status unknown")).toBeTruthy();
     view.rerender(
       <RoutingStatus
-        expected={id}
         onRefresh={vi.fn()}
         status={{
           ...current,

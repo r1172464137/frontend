@@ -195,7 +195,7 @@ export function RoutingDNS({
                 </Button>
               </div>
               <label className="block text-sm">
-                {t("ordered_routing.dns_protocol", "Protocol")}
+                {t("ordered_routing.dns_protocol", "Resolver protocol")}
                 <select
                   className="mt-1 h-9 w-full rounded-md border bg-background px-3"
                   value={resolver.protocol}

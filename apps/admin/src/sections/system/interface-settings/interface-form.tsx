@@ -178,10 +178,7 @@ export default function InterfaceForm() {
           >
             {t("common.cancel", "Cancel")}
           </Button>
-          <Button
-            disabled={!draft || loading || saving}
-            onClick={() => save()}
-          >
+          <Button disabled={!draft || loading || saving} onClick={() => save()}>
             {t("common.save", "Save Settings")}
           </Button>
         </SheetFooter>

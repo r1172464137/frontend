@@ -146,7 +146,7 @@
     "dns_move_up": "上移解析器 {{number}}",
     "dns_move_down": "下移解析器 {{number}}",
     "dns_rule": "解析器规则",
-    "dns_protocol": "协议",
+    "dns_protocol": "解析器协议",
     "dns_address": "解析器地址",
     "bootstrap_ip": "引导 IP（域名解析器）",
     "dns_domains": "域名（每行一个）",

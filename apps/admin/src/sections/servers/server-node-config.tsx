@@ -136,7 +136,7 @@ export default function ServerNodeConfig({
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && (saving || refreshingStatus)) return;
-    if (!((nextOpen || saveError ) || conflict)) holdDraft.current = false;
+    if (!(nextOpen || saveError || conflict)) holdDraft.current = false;
     if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
       holdDraft.current = false;
       resetConfig(queryConfig);
