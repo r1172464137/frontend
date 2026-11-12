@@ -28,10 +28,17 @@ jobs:
         run: |
           (cd apps/admin && ../../node_modules/.bin/vitest run)
           (cd apps/user && ../../node_modules/.bin/vitest run)
-      - name: Build admin
-        run: cd apps/admin && bun run build
+      - name: Build admin and user
+        run: |
+          (cd apps/admin && bun run build)
+          (cd apps/user && bun run build)
       - uses: actions/upload-artifact@v4
         with:
           name: admin-dist
           path: apps/admin/dist
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: user-dist
+          path: apps/user/dist
           retention-days: 7
