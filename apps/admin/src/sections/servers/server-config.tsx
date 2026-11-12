@@ -16,13 +16,6 @@ import {
 import { Input } from "@workspace/ui/components/input";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -51,11 +44,7 @@ import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { z } from "zod";
-import { dnsForWrite } from "./dns-config";
-import { DNSEditor } from "./dns-editor";
 import {
-  dnsIsValid,
-  editableDNS,
   globalWriteMatches,
   isDefiniteRejection,
   safeBackendError,
@@ -67,14 +56,8 @@ import {
   validateNodeRouting,
 } from "./node-routing";
 import { NodeRoutingEditor } from "./node-routing-editor";
+import { RoutingDNS } from "./routing-dns";
 import { RoutingConflict } from "./routing-status";
-
-const dnsConfigSchema = z.object({
-  proto: z.string(), // z.enum(['tcp', 'udp', 'tls', 'https', 'quic']),
-  address: z.string(),
-  server_name: z.string().optional(),
-  domains: z.array(z.string()),
-});
 
 function createNodeConfigSchema(intervalMessage: string) {
   const interval = z
@@ -89,8 +72,6 @@ function createNodeConfigSchema(intervalMessage: string) {
     node_pull_interval: interval,
     node_push_interval: interval,
     traffic_report_threshold: z.number().optional(),
-    ip_strategy: z.string().optional(),
-    dns: z.array(dnsConfigSchema).optional(),
   });
 }
 type NodeConfigFormData = z.infer<ReturnType<typeof createNodeConfigSchema>>;
@@ -139,8 +120,6 @@ export default function ServerConfig() {
       node_pull_interval: undefined,
       node_push_interval: undefined,
       traffic_report_threshold: undefined,
-      ip_strategy: "prefer_ipv4",
-      dns: [],
     },
   });
 
@@ -154,8 +133,6 @@ export default function ServerConfig() {
         node_pull_interval: config.node_pull_interval,
         node_push_interval: config.node_push_interval,
         traffic_report_threshold: config.traffic_report_threshold,
-        ip_strategy: config.ip_strategy ?? "",
-        dns: editableDNS(config.dns),
       });
     },
     [form]
@@ -170,7 +147,7 @@ export default function ServerConfig() {
 
   const validConfig = Boolean(
     cfgResp &&
-      cfgResp.routing_mode === "global-v1" &&
+      cfgResp.routing_mode === "global" &&
       isRoutingRevision(cfgResp.routing_revision) &&
       cfgResp.routing_revision > 0 &&
       routing
@@ -184,16 +161,6 @@ export default function ServerConfig() {
       (routingDirty && (!routing || validateNodeRouting(routing).length))
     )
       return;
-    if (dirtyFields.dns && !dnsIsValid(values.dns || [])) {
-      setTab("dns");
-      form.setError("dns", {
-        message: t(
-          "ordered_routing.dns_required",
-          "Check the UDP resolver addresses and domain rules before saving."
-        ),
-      });
-      return;
-    }
     for (const field of ["node_pull_interval", "node_push_interval"] as const) {
       if (dirtyFields[field] && values[field] === undefined) {
         setTab("basic");
@@ -206,9 +173,7 @@ export default function ServerConfig() {
         return;
       }
     }
-    const payload: API.UpdateNodeConfigRequest = {
-      routing_revision: cfgResp!.routing_revision,
-    };
+    const payload: API.UpdateNodeConfigRequest = {};
     if (dirtyFields.node_secret) payload.node_secret = values.node_secret ?? "";
     if (dirtyFields.node_pull_interval)
       payload.node_pull_interval = values.node_pull_interval;
@@ -216,9 +181,10 @@ export default function ServerConfig() {
       payload.node_push_interval = values.node_push_interval;
     if (dirtyFields.traffic_report_threshold)
       payload.traffic_report_threshold = values.traffic_report_threshold;
-    if (dirtyFields.ip_strategy) payload.ip_strategy = values.ip_strategy ?? "";
-    if (dirtyFields.dns) payload.dns = dnsForWrite(values.dns || []);
-    if (routingDirty) payload.routing = routing;
+    if (routingDirty) {
+      payload.routing = routing;
+      payload.routing_revision = cfgResp!.routing_revision;
+    }
     const revision = cfgResp!.routing_revision;
     holdDraft.current = true;
     setSaveError(undefined);
@@ -263,7 +229,14 @@ export default function ServerConfig() {
       await readBack(false);
     } catch (error) {
       const message = safeBackendError(error);
-      if (message) setSaveError(message);
+      if (message || isDefiniteRejection(error))
+        setSaveError(
+          message ||
+            t(
+              "ordered_routing.save_error",
+              "Save failed. Refresh to verify the current state before retrying."
+            )
+        );
       if (isRoutingConflict(error)) setConflict(true);
       else if (isDefiniteRejection(error))
         toast.error(
@@ -283,7 +256,8 @@ export default function ServerConfig() {
     <Sheet
       onOpenChange={(nextOpen) => {
         if (!nextOpen && saving) return;
-        if (nextOpen && queryConfig && !conflict) {
+        if (!((nextOpen || saveError ) || conflict)) holdDraft.current = false;
+        if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
           holdDraft.current = false;
           resetConfig(queryConfig);
         }
@@ -401,10 +375,7 @@ export default function ServerConfig() {
                 onChangeCapture={() => {
                   holdDraft.current = true;
                 }}
-                onSubmit={form.handleSubmit(onSubmit, (errors) => {
-                  if (errors.dns) setTab("dns");
-                  else setTab("basic");
-                })}
+                onSubmit={form.handleSubmit(onSubmit, () => setTab("basic"))}
               >
                 <fieldset disabled={saving}>
                   <TabsContent className="space-y-4" value="basic">
@@ -591,103 +562,21 @@ export default function ServerConfig() {
                   </TabsContent>
 
                   <TabsContent className="space-y-4" value="dns">
-                    <FormField
-                      control={form.control}
-                      name="ip_strategy"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t(
-                              "server_config.fields.ip_strategy",
-                              "IP Strategy"
-                            )}
-                          </FormLabel>
-                          <Select
-                            onValueChange={(value) => {
-                              holdDraft.current = true;
-                              field.onChange(
-                                value === "__node_default__" ? "" : value
-                              );
-                            }}
-                            value={
-                              field.value === ""
-                                ? "__node_default__"
-                                : field.value
-                            }
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={t(
-                                    "server_config.fields.ip_strategy_placeholder",
-                                    "Select IP strategy"
-                                  )}
-                                />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="__node_default__">
-                                {t(
-                                  "ordered_routing.ip_default",
-                                  "Node default"
-                                )}
-                              </SelectItem>
-                              <SelectItem value="prefer_ipv4">
-                                {t(
-                                  "server_config.fields.ip_strategy_ipv4",
-                                  "Prefer IPv4"
-                                )}
-                              </SelectItem>
-                              <SelectItem value="prefer_ipv6">
-                                {t(
-                                  "server_config.fields.ip_strategy_ipv6",
-                                  "Prefer IPv6"
-                                )}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormDescription>
-                            {t(
-                              "server_config.fields.ip_strategy_desc",
-                              "Choose IP version preference for network connections"
-                            )}
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="dns"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t(
-                              "server_config.fields.dns_config",
-                              "DNS Configuration"
-                            )}
-                          </FormLabel>
-                          <DNSEditor
-                            onChange={(values) => {
-                              holdDraft.current = true;
-                              form.clearErrors("dns");
-                              field.onChange(values);
-                            }}
-                            value={field.value || []}
-                          />
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {validConfig && routing && (
+                      <RoutingDNS
+                        value={routing}
+                        onChange={(next) => {
+                          holdDraft.current = true;
+                          setRouting(next);
+                          setRoutingDirty(true);
+                        }}
+                      />
+                    )}
                   </TabsContent>
 
                   <TabsContent className="space-y-4" value="routing">
                     <p className="text-sm">
-                      {t(
-                        "ordered_routing.global_v1",
-                        "Global ordered routing v1"
-                      )}
+                      {t("ordered_routing.global_v1", "Global ordered routing")}
                     </p>
                     <p className="text-muted-foreground text-sm">
                       {t(
@@ -726,7 +615,10 @@ export default function ServerConfig() {
         <SheetFooter className="flex-row justify-end gap-2 pt-3">
           <Button
             disabled={saving}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              if (!(saveError || conflict)) holdDraft.current = false;
+              setOpen(false);
+            }}
             variant="outline"
           >
             {t("actions.cancel", "Cancel")}

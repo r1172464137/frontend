@@ -20,6 +20,9 @@ import { cn } from "@workspace/ui/lib/utils";
 import React, { useState } from "react";
 import { useGlobalStore } from "@/stores/global";
 import { type NavItem, useNavs } from "./navs";
+import { filterMenu, useInterfaceConfig } from "./interface-config";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
 function hasChildren(obj: any): obj is { items: any[] } {
   return (
@@ -32,7 +35,19 @@ export function SidebarLeft({
 }: React.ComponentProps<typeof Sidebar>) {
   const { common } = useGlobalStore();
   const { site } = common;
-  const navs = useNavs();
+  const allNavs = useNavs();
+  const config = useInterfaceConfig();
+  const { t } = useTranslation("system");
+  const navs = React.useMemo(
+    () => filterMenu(allNavs, config.data?.hiddenMenuIds ?? []),
+    [allNavs, config.data]
+  );
+  React.useEffect(() => {
+    if (config.isError)
+      toast.error(
+        t("interface.loadFailed", "Failed to load interface settings")
+      );
+  }, [config.isError, t]);
   const pathname = useLocation({ select: (location) => location.pathname });
   const { state, isMobile } = useSidebar();
 

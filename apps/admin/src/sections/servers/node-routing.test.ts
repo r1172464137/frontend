@@ -138,6 +138,112 @@ describe("cutover ordered routing", () => {
       outboundReferences({ ...moved, default_outbound_id: ob }, ob).isDefault
     ).toBe(true);
   });
+  it("counts raw dialerProxy references without changing the raw connection", () => {
+    const original = policy();
+    const raw = `{"SockOpt":{"DIALERPROXY":"routing_${ob}","tcpNoDelay":true}}`;
+    const second = {
+      ...original.outbounds[0]!,
+      id: "ob_44444444-4444-4444-8444-444444444444",
+      name: "B",
+      flow: "",
+      stream_settings: raw,
+    };
+    const input: API.NodeRouting = {
+      ...original,
+      version: 2,
+      user_defaults: [],
+      outbounds: [...original.outbounds, second],
+    };
+    expect(outboundReferences(input, ob).chains).toEqual([second]);
+    expect(validateNodeRouting(input)).toEqual([]);
+    expect(input.outbounds[1]!.stream_settings).toBe(raw);
+  });
+  it("rejects mixed raw and structured cycles, conflicts and missing raw targets", () => {
+    const original = policy();
+    const b = "ob_44444444-4444-4444-8444-444444444444";
+    const first = {
+      ...original.outbounds[0]!,
+      stream_settings: `{"sockopt":{"dialerProxy":"routing_${b}"}}`,
+    };
+    const second = {
+      ...original.outbounds[0]!,
+      id: b,
+      name: "B",
+      via_outbound_id: ob,
+    };
+    const input: API.NodeRouting = {
+      ...original,
+      version: 2,
+      user_defaults: [],
+      outbounds: [first, second],
+    };
+    expect(validateNodeRouting(input).map((issue) => issue.code)).toContain(
+      "chainCycle"
+    );
+    const conflict = {
+      ...input,
+      outbounds: [
+        { ...first, via_outbound_id: b },
+        { ...second, via_outbound_id: "" },
+      ],
+    };
+    expect(validateNodeRouting(conflict).map((issue) => issue.code)).toContain(
+      "chainConflict"
+    );
+    const unknown = {
+      ...input,
+      outbounds: [
+        {
+          ...first,
+          stream_settings: '{"sockopt":{"dialerProxy":"not-a-target"}}',
+        },
+        { ...second, via_outbound_id: "" },
+      ],
+    };
+    expect(validateNodeRouting(unknown).map((issue) => issue.code)).toContain(
+      "unknownOutbound"
+    );
+    const dangling = {
+      ...unknown,
+      outbounds: [
+        {
+          ...first,
+          stream_settings:
+            '{"sockopt":{"dialerProxy":"routing_ob_99999999-9999-4999-8999-999999999999"}}',
+        },
+        { ...second, via_outbound_id: "" },
+      ],
+    };
+    expect(validateNodeRouting(dangling).map((issue) => issue.code)).toContain(
+      "unknownOutbound"
+    );
+  });
+  it("accepts raw Default and block terminals without custom references", () => {
+    for (const tag of ["Default", "block"]) {
+      const original = policy();
+      const input: API.NodeRouting = {
+        ...original,
+        version: 2,
+        user_defaults: [],
+        outbounds: [
+          {
+            ...original.outbounds[0]!,
+            flow: "",
+            stream_settings: `{"sockopt":{"dialerProxy":"${tag}"}}`,
+          },
+        ],
+      };
+      expect(validateNodeRouting(input)).toEqual([]);
+      expect(outboundReferences(input, ob).chains).toEqual([]);
+      const conflict = {
+        ...input,
+        outbounds: [{ ...input.outbounds[0]!, via_outbound_id: ob }],
+      };
+      expect(
+        validateNodeRouting(conflict).map((issue) => issue.code)
+      ).toContain("chainConflict");
+    }
+  });
   it("enforces ordered budgets and the inclusive 1 MiB boundary", () => {
     const input = policy();
     const longValues = Array.from(
@@ -198,6 +304,78 @@ describe("cutover ordered routing", () => {
       })
     ).toBe(false);
     expect(input.outbounds[0]?.allow_insecure).toBe(false);
+  });
+  it("compares backend-canonical v2 account and DNS values without changing submitted policy", () => {
+    const input: API.NodeRouting = {
+      ...policy(),
+      version: 2,
+      rules: [
+        { ...policy().rules[0]!, user_ids: [21, 1, 21] },
+        policy().rules[1]!,
+      ],
+      user_defaults: [
+        { user_id: 21, outbound_id: ob },
+        { user_id: 1, outbound_id: "direct" },
+      ],
+      dns_policy: {
+        query_strategy: "UseIP",
+        resolvers: [
+          {
+            id: "dns_44444444-4444-4444-8444-444444444444",
+            protocol: "udp",
+            address: "DNS.Example.COM.:0053",
+            domains: ["geosite:cn"],
+            outbound_id: "direct",
+          },
+          {
+            id: "dns_55555555-5555-4555-8555-555555555555",
+            protocol: "tcp",
+            address: "[2001:0DB8:0:0:0:0:0:53]:0053",
+            bootstrap_ip: "2001:0DB8:0:0:0:0:0:1",
+            domains: ["domain:example.com"],
+            outbound_id: ob,
+          },
+          {
+            id: "dns_66666666-6666-4666-8666-666666666666",
+            protocol: "https",
+            address: "https://DNS.Example.COM/dns-query",
+            domains: [],
+            outbound_id: "direct",
+          },
+        ],
+      },
+    };
+    const original = structuredClone(input);
+    const observed = structuredClone(input);
+    observed.rules[0]!.user_ids = [1, 21];
+    observed.user_defaults!.reverse();
+    observed.dns_policy!.resolvers[0]!.address = "dns.example.com.:53";
+    observed.dns_policy!.resolvers[1]!.address = "[2001:db8::53]:53";
+    observed.dns_policy!.resolvers[1]!.bootstrap_ip = "2001:db8::1";
+    expect(routingReadbackMatches(input, observed)).toBe(true);
+    expect(input).toEqual(original);
+    const differentUser = structuredClone(observed);
+    differentUser.rules[0]!.user_ids = [1, 22];
+    expect(routingReadbackMatches(input, differentUser)).toBe(false);
+    const differentDefault = structuredClone(observed);
+    differentDefault.user_defaults![0]!.outbound_id = ob;
+    expect(routingReadbackMatches(input, differentDefault)).toBe(false);
+    const differentAccount = structuredClone(observed);
+    differentAccount.user_defaults![0]!.user_id = 2;
+    expect(routingReadbackMatches(input, differentAccount)).toBe(false);
+    const differentResolver = structuredClone(observed);
+    differentResolver.dns_policy!.resolvers[0]!.address = "dns.example.com:53";
+    expect(routingReadbackMatches(input, differentResolver)).toBe(false);
+    const differentBootstrap = structuredClone(observed);
+    differentBootstrap.dns_policy!.resolvers[1]!.bootstrap_ip = "2001:db8::2";
+    expect(routingReadbackMatches(input, differentBootstrap)).toBe(false);
+    const differentURL = structuredClone(observed);
+    differentURL.dns_policy!.resolvers[2]!.address =
+      "https://dns.example.com/dns-query";
+    expect(routingReadbackMatches(input, differentURL)).toBe(false);
+    const reordered = structuredClone(observed);
+    reordered.rules.reverse();
+    expect(routingReadbackMatches(input, reordered)).toBe(false);
   });
   it("classifies the backend-verified status using exact identity and content receipt TTL", () => {
     const view = status();

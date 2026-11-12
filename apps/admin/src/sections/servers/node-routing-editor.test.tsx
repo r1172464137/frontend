@@ -103,6 +103,32 @@ afterEach(() => {
 });
 
 describe("real ordered routing editor", () => {
+  it("refuses deletion when a raw dialerProxy references the connection", () => {
+    const raw = `{"sockopt":{"dialerProxy":"routing_${ob}"}}`;
+    const source = {
+      ...initial.outbounds[0]!,
+      id: "ob_44444444-4444-4444-8444-444444444444",
+      name: "Raw chain",
+      stream_settings: raw,
+    };
+    render(
+      <Harness
+        initialValue={{
+          ...initial,
+          version: 2,
+          user_defaults: [],
+          rules: [],
+          outbounds: [initial.outbounds[0]!, source],
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete Proxy" }));
+    expect(
+      screen.getByText(/Cannot delete this connection/).textContent
+    ).toContain("Raw chain");
+    expect(value().outbounds).toHaveLength(2);
+    expect(value().outbounds[1]!.stream_settings).toBe(raw);
+  });
   it("moves with accessible buttons, toggles false and refuses deleting a disabled rule's target", () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Move 2. Second up" }));

@@ -40,12 +40,10 @@ export function RoutingConflict({
 
 export function RoutingStatus({
   status,
-  expected,
   onRefresh,
   refreshDisabled = false,
 }: {
   status?: API.RoutingStatusView;
-  expected?: API.RoutingIdentity;
   onRefresh: () => void;
   refreshDisabled?: boolean;
 }) {
@@ -62,11 +60,7 @@ export function RoutingStatus({
     );
     return () => window.clearTimeout(timer);
   }, [received]);
-  const state = routingApplicationState(
-    status,
-    expected,
-    Math.max(clock, Date.now())
-  );
+  const state = routingApplicationState(status, Math.max(clock, Date.now()));
   const fallback = {
     pending: "Pending node application",
     applied: "Applied by node",

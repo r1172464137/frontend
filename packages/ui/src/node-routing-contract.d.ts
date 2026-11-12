@@ -11,19 +11,37 @@ declare global {
       kind: "domain" | "ip" | "protocol";
       values: string[];
       outbound_id: string;
+      // Empty means every account.
+      user_ids: number[];
       [field: string]: unknown;
     };
     type NodeRoutingOutbound = Omit<NodeOutbound, "rules" | "plugin_opts"> & {
       id: string;
       rules?: string[];
       plugin_opts?: unknown;
+      via_outbound_id?: string;
       [field: string]: unknown;
     };
+    type RoutingDNSResolver = {
+      id: string;
+      protocol: "udp" | "tcp" | "https" | "system";
+      address: string;
+      domains: string[];
+      outbound_id: string;
+      bootstrap_ip?: string;
+    };
+    type NodeRoutingDNS = {
+      query_strategy: "UseIP" | "UseIPv4" | "UseIPv6";
+      resolvers: RoutingDNSResolver[];
+    };
     type NodeRouting = {
-      version: 1;
+      version: 3;
       outbounds: NodeRoutingOutbound[];
       rules: NodeRouteRule[];
       default_outbound_id: string;
+      user_defaults: { user_id: number; outbound_id: string }[];
+      dns: NodeRoutingDNS;
+      target_ip_preference: "none" | "prefer_ipv4" | "prefer_ipv6";
       [field: string]: unknown;
     };
     type RoutingIdentity = {
@@ -32,11 +50,13 @@ declare global {
       source_server_id: number;
       source_revision: number;
       local_transition_revision: number;
+      snapshot_id?: string;
     };
     type NodeRoutingProjection = NodeRouting & RoutingIdentity;
     type RoutingStatusView = {
       known: boolean;
       reporter_verified: boolean;
+      desired_snapshot_id?: string | null;
       report?: {
         routing_version: number;
         routing_sequence?: number;
@@ -53,14 +73,13 @@ declare global {
         updated_at: number;
         conflict?: boolean;
       };
+      synced: boolean;
     };
     type NodeConfig = {
       routing: NodeRouting;
       routing_revision: number;
       routing_mode: string;
       routing_capabilities: number[];
-      dns?: NodeDNS[] | null;
-      ip_strategy: string;
       node_pull_interval: number;
       node_push_interval: number;
       node_secret: string;
@@ -69,25 +88,17 @@ declare global {
     type UpdateNodeConfigRequest = {
       routing?: NodeRouting;
       routing_revision?: number;
-      dns?: NodeDNS[];
-      ip_strategy?: string;
       node_pull_interval?: number;
       node_push_interval?: number;
       node_secret?: string;
       traffic_report_threshold?: number;
     };
     type ServerNodeConfigOverride = {
-      dns?: NodeDNS[] | null;
-      inherit_dns: boolean;
-      inherit_ip_strategy: boolean;
       inherit_routing: boolean;
-      ip_strategy: string;
       routing: NodeRouting | null;
       routing_revision: number;
     };
     type ServerNodeConfigValues = {
-      dns?: NodeDNS[] | null;
-      ip_strategy: string;
       routing: NodeRoutingProjection;
       routing_mode: string;
       routing_revision: number;
@@ -99,11 +110,7 @@ declare global {
       routing_status: RoutingStatusView;
     };
     type UpdateServerNodeConfigRequest = {
-      dns?: NodeDNS[];
-      inherit_dns?: boolean;
-      inherit_ip_strategy?: boolean;
       inherit_routing?: boolean;
-      ip_strategy?: string;
       routing?: NodeRouting;
       routing_revision?: number;
       server_id: number;

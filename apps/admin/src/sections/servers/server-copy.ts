@@ -3,12 +3,6 @@ import {
   getServerNodeConfig,
   postServerNodeConfigUpdate,
 } from "@workspace/ui/services/node-config";
-import { dnsForWrite } from "./dns-config";
-import {
-  dnsIsValid,
-  editableDNS,
-  serverWriteMatches,
-} from "./node-config-write";
 import {
   isRoutingRevision,
   routingReadbackMatches,
@@ -43,14 +37,6 @@ export async function beginServerCopy(
     !(
       config?.override && isRoutingRevision(config.override.routing_revision)
     ) ||
-    typeof config.override.inherit_ip_strategy !== "boolean" ||
-    typeof config.override.inherit_dns !== "boolean" ||
-    (!config.override.inherit_ip_strategy &&
-      typeof config.override.ip_strategy !== "string") ||
-    !(
-      config.override.inherit_dns ||
-      dnsIsValid(editableDNS(config.override.dns))
-    ) ||
     config.override.inherit_routing !== (config.override.routing === null) ||
     (!config.override.inherit_routing &&
       (!config.override.routing ||
@@ -80,26 +66,6 @@ export async function beginServerCopy(
   }
 }
 
-function ipPayload(task: ServerCopyTask): API.UpdateServerNodeConfigRequest {
-  const desired = task.desired;
-  return {
-    server_id: task.target.id,
-    inherit_ip_strategy: desired.inherit_ip_strategy,
-    ...(desired.inherit_ip_strategy
-      ? {}
-      : { ip_strategy: desired.ip_strategy }),
-  };
-}
-function dnsPayload(task: ServerCopyTask): API.UpdateServerNodeConfigRequest {
-  const desired = task.desired;
-  return {
-    server_id: task.target.id,
-    inherit_dns: desired.inherit_dns,
-    ...(desired.inherit_dns
-      ? {}
-      : { dns: dnsForWrite(editableDNS(desired.dns)) }),
-  };
-}
 function routingMatches(
   task: ServerCopyTask,
   current: API.ServerNodeConfigOverride
@@ -116,12 +82,7 @@ function copyMatches(
   task: ServerCopyTask,
   current: API.GetServerNodeConfigResponse
 ) {
-  const revision = current.override.routing_revision;
-  return (
-    serverWriteMatches(ipPayload(task), current, revision) &&
-    serverWriteMatches(dnsPayload(task), current, revision) &&
-    routingMatches(task, current.override)
-  );
+  return routingMatches(task, current.override);
 }
 
 /** Retry only configuration on the already-created server; never call create. */
@@ -144,18 +105,14 @@ export async function applyServerCopy(task: ServerCopyTask): Promise<boolean> {
   const revision = initial.override.routing_revision;
   const payload: API.UpdateServerNodeConfigRequest = {
     server_id: task.target.id,
-    routing_revision: revision,
   };
-  if (!serverWriteMatches(ipPayload(task), initial, revision))
-    Object.assign(payload, ipPayload(task));
-  if (!serverWriteMatches(dnsPayload(task), initial, revision))
-    Object.assign(payload, dnsPayload(task));
   if (!routingMatches(task, initial.override)) {
+    payload.routing_revision = revision;
     if (task.desired.inherit_routing) payload.inherit_routing = true;
     else if (task.desired.routing) payload.routing = task.desired.routing;
     else return false;
   }
-  if (Object.keys(payload).length === 2) return copyMatches(task, initial);
+  if (Object.keys(payload).length === 1) return copyMatches(task, initial);
   try {
     await postServerNodeConfigUpdate(payload, copyRequestOptions);
   } catch {
@@ -168,11 +125,7 @@ export async function applyServerCopy(task: ServerCopyTask): Promise<boolean> {
         copyRequestOptions
       )
     ).data.data;
-    return Boolean(
-      readback &&
-        serverWriteMatches(payload, readback, revision) &&
-        copyMatches(task, readback)
-    );
+    return Boolean(readback && copyMatches(task, readback));
   } catch {
     return false;
   }

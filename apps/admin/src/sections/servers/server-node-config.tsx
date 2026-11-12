@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import {
   Alert,
@@ -9,22 +8,7 @@ import {
 } from "@workspace/ui/components/alert";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@workspace/ui/components/form";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select";
 import {
   Sheet,
   SheetContent,
@@ -43,21 +27,14 @@ import {
   TabsTrigger,
 } from "@workspace/ui/components/tabs";
 import { Icon } from "@workspace/ui/composed/icon";
-import { cn } from "@workspace/ui/lib/utils";
 import {
   getServerNodeConfig,
   postServerNodeConfigUpdate as updateServerNodeConfig,
 } from "@workspace/ui/services/node-config";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type Control, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { z } from "zod";
-import { dnsForWrite } from "./dns-config";
-import { DNSEditor } from "./dns-editor";
 import {
-  dnsIsValid,
-  editableDNS,
   isDefiniteRejection,
   safeBackendError,
   serverWriteMatches,
@@ -66,122 +43,11 @@ import {
   isRoutingConflict,
   isRoutingRevision,
   routingContentFromProjection,
-  routingIdentityFromProjection,
   validateNodeRouting,
 } from "./node-routing";
 import { NodeRoutingEditor } from "./node-routing-editor";
+import { RoutingDNS } from "./routing-dns";
 import { RoutingConflict, RoutingStatus } from "./routing-status";
-
-const dnsConfigSchema = z.object({
-  proto: z.string(),
-  address: z.string(),
-  server_name: z.string().optional(),
-  domains: z.array(z.string()),
-});
-
-const serverNodeConfigSchema = z.object({
-  inherit_ip_strategy: z.boolean(),
-  ip_strategy: z.string(),
-  inherit_dns: z.boolean(),
-  dns: z.array(dnsConfigSchema),
-});
-
-type ServerNodeConfigFormData = z.infer<typeof serverNodeConfigSchema>;
-type IPStrategy = ServerNodeConfigFormData["ip_strategy"];
-
-function normalizeIPStrategy(value?: string): IPStrategy {
-  return value ?? "";
-}
-
-function ToggleField({
-  control,
-  name,
-  label,
-  description,
-  inheritedText,
-  customText,
-  onDraftStart,
-}: {
-  control: Control<ServerNodeConfigFormData>;
-  name: "inherit_ip_strategy" | "inherit_dns";
-  label: string;
-  description: string;
-  inheritedText: string;
-  customText: string;
-  onDraftStart: () => void;
-}) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <div
-          className={cn(
-            "flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors",
-            field.value ? "bg-muted/30" : "border-primary/30 bg-primary/5"
-          )}
-        >
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-sm">{label}</span>
-              <Badge variant={field.value ? "secondary" : "outline"}>
-                {field.value ? inheritedText : customText}
-              </Badge>
-            </div>
-            <p className="text-muted-foreground text-xs">{description}</p>
-          </div>
-          <Switch
-            aria-label={label}
-            checked={field.value}
-            onCheckedChange={(value) => {
-              onDraftStart();
-              field.onChange(value);
-            }}
-          />
-        </div>
-      )}
-    />
-  );
-}
-
-function InheritedPreview({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border border-dashed bg-muted/20 p-4">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary">
-        <Icon
-          className="size-4 text-muted-foreground"
-          icon="mdi:source-branch-sync"
-        />
-      </div>
-      <div className="space-y-1">
-        <p className="font-medium text-sm">{title}</p>
-        <p className="text-muted-foreground text-xs">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-function getFormValues(
-  config: API.GetServerNodeConfigResponse
-): ServerNodeConfigFormData {
-  const { effective, override } = config;
-  return {
-    inherit_ip_strategy: override.inherit_ip_strategy,
-    ip_strategy: normalizeIPStrategy(
-      override.inherit_ip_strategy
-        ? effective.ip_strategy
-        : override.ip_strategy
-    ),
-    inherit_dns: override.inherit_dns,
-    dns: editableDNS(override.inherit_dns ? effective.dns : override.dns),
-  };
-}
 
 export default function ServerNodeConfig({
   server,
@@ -194,7 +60,7 @@ export default function ServerNodeConfig({
 }) {
   const { t } = useTranslation("servers");
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState("dns");
+  const [tab, setTab] = useState("routing");
   const [saving, setSaving] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
   const [routing, setRouting] = useState<API.NodeRouting>();
@@ -231,25 +97,14 @@ export default function ServerNodeConfig({
   const queryConfig =
     querySnapshot?.serverId === server.id ? querySnapshot.config : undefined;
 
-  const form = useForm<ServerNodeConfigFormData>({
-    resolver: zodResolver(serverNodeConfigSchema),
-    defaultValues: {
-      inherit_ip_strategy: true,
-      ip_strategy: "prefer_ipv4",
-      inherit_dns: true,
-      dns: [],
-    },
-  });
-
   const resetConfig = useCallback(
     (config: API.GetServerNodeConfigResponse) => {
       setSnapshot({ serverId: server.id, config });
       setRouting(routingContentFromProjection(config.effective.routing));
       setInheritRouting(config.override.inherit_routing);
       setRoutingDirty(false);
-      form.reset(getFormValues(config));
     },
-    [form, server.id]
+    [server.id]
   );
   useEffect(() => {
     holdDraft.current = false;
@@ -257,16 +112,10 @@ export default function ServerNodeConfig({
     setConflict(false);
     setUncertain(false);
   }, [server.id]);
-  const { isDirty, dirtyFields } = form.formState;
-  useEffect(() => {
-    if (isDirty) holdDraft.current = true;
-  }, [isDirty]);
   useEffect(() => {
     if (queryConfig && !holdDraft.current) resetConfig(queryConfig);
   }, [queryConfig, resetConfig]);
 
-  const inheritIPStrategy = form.watch("inherit_ip_strategy");
-  const inheritDNS = form.watch("inherit_dns");
   const inheritDirty = cfgResp
     ? inheritRouting !== cfgResp.override.inherit_routing
     : false;
@@ -279,15 +128,16 @@ export default function ServerNodeConfig({
       isRoutingRevision(cfgResp.override.routing_revision) &&
       isRoutingRevision(cfgResp.global.routing_revision) &&
       cfgResp.global.routing_revision > 0 &&
-      cfgResp.global.routing_mode === "global-v1" &&
+      cfgResp.global.routing_mode === "inherited" &&
       cfgResp.effective.routing_mode ===
-        (cfgResp.override.inherit_routing ? "global-v1" : "local-v1") &&
+        (cfgResp.override.inherit_routing ? "inherited" : "local") &&
       cfgResp.override.inherit_routing === (cfgResp.override.routing === null)
   );
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen && (saving || refreshingStatus)) return;
-    if (nextOpen && queryConfig && !conflict) {
+    if (!((nextOpen || saveError ) || conflict)) holdDraft.current = false;
+    if (nextOpen && queryConfig && !conflict && !holdDraft.current) {
       holdDraft.current = false;
       resetConfig(queryConfig);
     }
@@ -295,8 +145,7 @@ export default function ServerNodeConfig({
   }
 
   async function refreshStatus() {
-    if (saving || refreshingStatus || conflict || routingChanged || isDirty)
-      return;
+    if (saving || refreshingStatus || conflict || routingChanged) return;
     setRefreshingStatus(true);
     holdDraft.current = true;
     try {
@@ -326,51 +175,20 @@ export default function ServerNodeConfig({
     }
   }
 
-  function getIPStrategyLabel(value?: string) {
-    if (value === "prefer_ipv6")
-      return t("server_config.fields.ip_strategy_ipv6", "Prefer IPv6");
-    if (value === "prefer_ipv4")
-      return t("server_config.fields.ip_strategy_ipv4", "Prefer IPv4");
-    return value || t("ordered_routing.ip_default", "Node default");
-  }
-
-  async function onSubmit(values: ServerNodeConfigFormData) {
+  async function onSubmit() {
     if (
       conflict ||
       !validConfig ||
-      (routingChanged &&
-        !inheritRouting &&
-        (!routing || validateNodeRouting(routing).length))
+      !routingChanged ||
+      (!inheritRouting && (!routing || validateNodeRouting(routing).length))
     )
       return;
     const payload: API.UpdateServerNodeConfigRequest = {
       server_id: server.id,
       routing_revision: cfgResp!.override.routing_revision,
     };
-    if (dirtyFields.inherit_ip_strategy || dirtyFields.ip_strategy) {
-      payload.inherit_ip_strategy = values.inherit_ip_strategy;
-      if (!values.inherit_ip_strategy) payload.ip_strategy = values.ip_strategy;
-    }
-    if (dirtyFields.inherit_dns || dirtyFields.dns) {
-      payload.inherit_dns = values.inherit_dns;
-      if (!values.inherit_dns) {
-        if (!dnsIsValid(values.dns)) {
-          setTab("dns");
-          form.setError("dns", {
-            message: t(
-              "ordered_routing.dns_required",
-              "Check the UDP resolver addresses and domain rules before saving."
-            ),
-          });
-          return;
-        }
-        payload.dns = dnsForWrite(values.dns);
-      }
-    }
-    if (routingChanged) {
-      if (inheritRouting) payload.inherit_routing = true;
-      else payload.routing = routing;
-    }
+    if (inheritRouting) payload.inherit_routing = true;
+    else payload.routing = routing;
     const revision = cfgResp!.override.routing_revision;
     holdDraft.current = true;
     setSaveError(undefined);
@@ -417,7 +235,14 @@ export default function ServerNodeConfig({
       await readBack(false);
     } catch (error) {
       const message = safeBackendError(error);
-      if (message) setSaveError(message);
+      if (message || isDefiniteRejection(error))
+        setSaveError(
+          message ||
+            t(
+              "ordered_routing.save_error",
+              "Save failed. Refresh to verify the current state before retrying."
+            )
+        );
       if (isRoutingConflict(error)) setConflict(true);
       else if (isDefiniteRejection(error))
         toast.error(
@@ -505,13 +330,9 @@ export default function ServerNodeConfig({
                     </span>
                     <Badge
                       className="px-1.5 py-0"
-                      variant={
-                        inheritIPStrategy && inheritDNS
-                          ? "secondary"
-                          : "outline"
-                      }
+                      variant={inheritRouting ? "secondary" : "outline"}
                     >
-                      {inheritIPStrategy && inheritDNS
+                      {inheritRouting
                         ? t("server_node_config.modeInherited", "Inherited")
                         : t("server_node_config.modeCustom", "Custom")}
                     </Badge>
@@ -548,286 +369,127 @@ export default function ServerNodeConfig({
                   />
                 ) : null}
 
-                <Form {...form}>
-                  <form
-                    className="space-y-4 pt-4"
-                    id="server-node-config-form"
-                    onChangeCapture={() => {
-                      holdDraft.current = true;
-                    }}
-                    onSubmit={form.handleSubmit(onSubmit, () => setTab("dns"))}
-                  >
-                    <fieldset disabled={saving || refreshingStatus}>
-                      <TabsContent className="space-y-4" value="dns">
-                        <section className="space-y-3">
-                          <ToggleField
-                            control={form.control}
-                            customText={t(
-                              "server_node_config.modeCustom",
-                              "Custom"
-                            )}
-                            description={t(
-                              "server_node_config.inherit_ip_strategy_desc",
-                              "Turn this off to choose a different IP preference for this server."
-                            )}
-                            inheritedText={t(
-                              "server_node_config.modeInherited",
-                              "Inherited"
-                            )}
-                            label={t(
-                              "server_node_config.inherit_ip_strategy",
-                              "Use global IP strategy"
-                            )}
-                            name="inherit_ip_strategy"
-                            onDraftStart={() => {
-                              holdDraft.current = true;
-                            }}
-                          />
-                          {inheritIPStrategy ? (
-                            <InheritedPreview
-                              description={t(
-                                "server_node_config.global_ip_strategy_summary",
-                                "Current global value: {{value}}",
-                                {
-                                  value: getIPStrategyLabel(
-                                    cfgResp.global.ip_strategy
-                                  ),
-                                }
-                              )}
-                              title={t(
-                                "server_node_config.globalPreview",
-                                "Using global configuration"
-                              )}
-                            />
-                          ) : (
-                            <FormField
-                              control={form.control}
-                              name="ip_strategy"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>
-                                    {t(
-                                      "server_config.fields.ip_strategy",
-                                      "IP Strategy"
-                                    )}
-                                  </FormLabel>
-                                  <Select
-                                    onValueChange={(value) => {
-                                      holdDraft.current = true;
-                                      field.onChange(
-                                        value === "__node_default__"
-                                          ? ""
-                                          : value
-                                      );
-                                    }}
-                                    value={
-                                      field.value === ""
-                                        ? "__node_default__"
-                                        : field.value
-                                    }
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger>
-                                        <SelectValue
-                                          placeholder={t(
-                                            "server_config.fields.ip_strategy_placeholder",
-                                            "Select IP strategy"
-                                          )}
-                                        />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      <SelectItem value="__node_default__">
-                                        {t(
-                                          "ordered_routing.ip_default",
-                                          "Node default"
-                                        )}
-                                      </SelectItem>
-                                      <SelectItem value="prefer_ipv4">
-                                        {t(
-                                          "server_config.fields.ip_strategy_ipv4",
-                                          "Prefer IPv4"
-                                        )}
-                                      </SelectItem>
-                                      <SelectItem value="prefer_ipv6">
-                                        {t(
-                                          "server_config.fields.ip_strategy_ipv6",
-                                          "Prefer IPv6"
-                                        )}
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          )}
-                        </section>
-
-                        <section className="space-y-3 border-t pt-4">
-                          <ToggleField
-                            control={form.control}
-                            customText={t(
-                              "server_node_config.modeCustom",
-                              "Custom"
-                            )}
-                            description={t(
-                              "server_node_config.inherit_dns_desc",
-                              "Turn this off to maintain a DNS list only for this server."
-                            )}
-                            inheritedText={t(
-                              "server_node_config.modeInherited",
-                              "Inherited"
-                            )}
-                            label={t(
-                              "server_node_config.inherit_dns",
-                              "Use global DNS configuration"
-                            )}
-                            name="inherit_dns"
-                            onDraftStart={() => {
-                              holdDraft.current = true;
-                            }}
-                          />
-                          {inheritDNS ? (
-                            <InheritedPreview
-                              description={t(
-                                "server_node_config.global_dns_summary",
-                                "{{count}} DNS entries are provided by the global configuration.",
-                                { count: cfgResp.global.dns?.length || 0 }
-                              )}
-                              title={t(
-                                "server_node_config.globalPreview",
-                                "Using global configuration"
-                              )}
-                            />
-                          ) : (
-                            <FormField
-                              control={form.control}
-                              name="dns"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>
-                                    {t(
-                                      "server_config.fields.dns_config",
-                                      "DNS Configuration"
-                                    )}
-                                  </FormLabel>
-                                  <DNSEditor
-                                    onChange={(values) => {
-                                      holdDraft.current = true;
-                                      form.clearErrors("dns");
-                                      field.onChange(values);
-                                    }}
-                                    value={field.value || []}
-                                  />
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          )}
-                        </section>
-                      </TabsContent>
-
-                      <TabsContent className="space-y-4" value="routing">
-                        <RoutingStatus
-                          expected={routingIdentityFromProjection(
-                            cfgResp.effective.routing
-                          )}
-                          onRefresh={refreshStatus}
-                          refreshDisabled={
-                            saving ||
-                            refreshingStatus ||
-                            conflict ||
-                            routingChanged ||
-                            isDirty
-                          }
-                          status={cfgResp.routing_status}
+                <form
+                  className="space-y-4 pt-4"
+                  id="server-node-config-form"
+                  onChangeCapture={() => {
+                    holdDraft.current = true;
+                  }}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    onSubmit();
+                  }}
+                >
+                  <fieldset disabled={saving || refreshingStatus}>
+                    <TabsContent className="space-y-4" value="dns">
+                      {validConfig && routing && globalPolicy && (
+                        <RoutingDNS
+                          value={inheritRouting ? globalPolicy : routing}
+                          readOnly={inheritRouting}
+                          onChange={(next) => {
+                            holdDraft.current = true;
+                            setRouting(next);
+                            setRoutingDirty(true);
+                          }}
                         />
-                        <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
-                          <div className="space-y-1">
-                            <p className="font-medium text-sm">
-                              {t(
-                                "ordered_routing.use_global",
-                                "Use global routing"
-                              )}
-                            </p>
-                            <p className="text-muted-foreground text-xs">
-                              {inheritRouting
-                                ? t(
-                                    "ordered_routing.inherited_v1",
-                                    "Inherited global ordered routing"
-                                  )
-                                : t(
-                                    "ordered_routing.local_v1",
-                                    "Complete local ordered routing override"
-                                  )}
-                            </p>
-                          </div>
-                          <Switch
-                            aria-label={t(
+                      )}
+                    </TabsContent>
+
+                    <TabsContent className="space-y-4" value="routing">
+                      <RoutingStatus
+                        onRefresh={refreshStatus}
+                        refreshDisabled={
+                          saving ||
+                          refreshingStatus ||
+                          conflict ||
+                          routingChanged
+                        }
+                        status={cfgResp.routing_status}
+                      />
+                      <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
+                        <div className="space-y-1">
+                          <p className="font-medium text-sm">
+                            {t(
                               "ordered_routing.use_global",
                               "Use global routing"
                             )}
-                            checked={inheritRouting}
-                            disabled={!validConfig}
-                            onCheckedChange={(next) => {
-                              holdDraft.current = true;
-                              setInheritRouting(next);
-                            }}
-                          />
-                        </div>
-                        <p className="text-muted-foreground text-sm">
-                          {inheritRouting
-                            ? t(
-                                "ordered_routing.inherit_desc",
-                                "This server follows the current global routing policy. Saving inheritance removes its local override."
-                              )
-                            : t(
-                                "ordered_routing.override_desc",
-                                "This is a complete local copy. Future global routing changes will not propagate to this server."
-                              )}
-                        </p>
-                        {!inheritRouting && cfgResp.override.inherit_routing ? (
-                          <p className="text-muted-foreground text-xs">
-                            {t(
-                              "ordered_routing.copy_source",
-                              "Draft copied from global revision {{revision}}; later global changes are not merged automatically.",
-                              { revision: cfgResp.global.routing_revision }
-                            )}
                           </p>
-                        ) : null}
+                          <p className="text-muted-foreground text-xs">
+                            {inheritRouting
+                              ? t(
+                                  "ordered_routing.inherited_v1",
+                                  "Inherited global ordered routing"
+                                )
+                              : t(
+                                  "ordered_routing.local_v1",
+                                  "Complete local ordered routing override"
+                                )}
+                          </p>
+                        </div>
+                        <Switch
+                          aria-label={t(
+                            "ordered_routing.use_global",
+                            "Use global routing"
+                          )}
+                          checked={inheritRouting}
+                          disabled={!validConfig}
+                          onCheckedChange={(next) => {
+                            holdDraft.current = true;
+                            setInheritRouting(next);
+                          }}
+                        />
+                      </div>
+                      <p className="text-muted-foreground text-sm">
+                        {inheritRouting
+                          ? t(
+                              "ordered_routing.inherit_desc",
+                              "This server follows the current global routing policy. Saving inheritance removes its local override."
+                            )
+                          : t(
+                              "ordered_routing.override_desc",
+                              "This is a complete local copy. Future global routing changes will not propagate to this server."
+                            )}
+                      </p>
+                      {!inheritRouting && cfgResp.override.inherit_routing ? (
                         <p className="text-muted-foreground text-xs">
                           {t(
-                            "ordered_routing.offline_save",
-                            "Routing can be saved while the node is offline. Older nodes receive HTTP 426; only a matching node receipt confirms application."
+                            "ordered_routing.copy_source",
+                            "Draft copied from global revision {{revision}}; later global changes are not merged automatically.",
+                            { revision: cfgResp.global.routing_revision }
                           )}
                         </p>
-                        {validConfig ? null : (
-                          <p className="text-destructive" role="alert">
-                            {t(
-                              "ordered_routing.unsupported_policy",
-                              "This routing policy is invalid or uses an unsupported version. It cannot be edited."
-                            )}
-                          </p>
+                      ) : null}
+                      <p className="text-muted-foreground text-xs">
+                        {t(
+                          "ordered_routing.offline_save",
+                          "Routing can be saved while the node is offline. Older nodes receive HTTP 426; only a matching node receipt confirms application."
                         )}
-                        {validConfig && routing && globalPolicy ? (
-                          <NodeRoutingEditor
-                            onChange={(next) => {
-                              holdDraft.current = true;
-                              setRouting(next);
-                              setRoutingDirty(true);
-                            }}
-                            onDraftStart={() => {
-                              holdDraft.current = true;
-                            }}
-                            readOnly={inheritRouting}
-                            value={inheritRouting ? globalPolicy : routing}
-                          />
-                        ) : null}
-                      </TabsContent>
-                    </fieldset>
-                  </form>
-                </Form>
+                      </p>
+                      {validConfig ? null : (
+                        <p className="text-destructive" role="alert">
+                          {t(
+                            "ordered_routing.unsupported_policy",
+                            "This routing policy is invalid or uses an unsupported version. It cannot be edited."
+                          )}
+                        </p>
+                      )}
+                      {validConfig && routing && globalPolicy ? (
+                        <NodeRoutingEditor
+                          onChange={(next) => {
+                            holdDraft.current = true;
+                            setRouting(next);
+                            setRoutingDirty(true);
+                          }}
+                          onDraftStart={() => {
+                            holdDraft.current = true;
+                          }}
+                          readOnly={inheritRouting}
+                          value={inheritRouting ? globalPolicy : routing}
+                        />
+                      ) : null}
+                    </TabsContent>
+                  </fieldset>
+                </form>
               </Tabs>
             ) : null}
           </div>
@@ -835,7 +497,7 @@ export default function ServerNodeConfig({
 
         <SheetFooter className="flex-row items-center justify-between gap-3 border-t">
           <p className="text-muted-foreground text-xs">
-            {isDirty || routingChanged
+            {routingChanged
               ? t("server_node_config.unsavedChanges", "Unsaved changes")
               : t("server_node_config.noChanges", "No unsaved changes")}
           </p>
@@ -855,7 +517,7 @@ export default function ServerNodeConfig({
                 isLoading ||
                 isError ||
                 !validConfig ||
-                !(isDirty || routingChanged) ||
+                !routingChanged ||
                 (routingChanged &&
                   !inheritRouting &&
                   (!routing || validateNodeRouting(routing).length > 0))

@@ -524,11 +524,13 @@ subscription URL does not carry them, in query-string form such as
     uot_version?: number;
     user?: string;
     uuid?: string;
+    via_outbound_id?: string;
     xhttp_extra?: string;
     xhttp_mode?: string;
   };
 
   type GeneratedGetServerNodeConfigResponse = {
+    desired_snapshot_id: string;
     effective: GeneratedServerNodeConfigValues;
     global: GeneratedServerNodeConfigValues;
     override: GeneratedServerNodeConfigOverride;
@@ -543,6 +545,7 @@ subscription URL does not carry them, in query-string form such as
     node_secret: string;
     routing: GeneratedNodeRouting;
     routing_capabilities: number[];
+    routing_downgrade?: boolean;
     routing_mode: string;
     routing_revision: number;
     traffic_report_threshold: number;
@@ -550,8 +553,10 @@ subscription URL does not carry them, in query-string form such as
 
   type GeneratedNodeRouting = {
     default_outbound_id: string;
+    dns_policy: NodeDNSPolicy;
     outbounds: GeneratedConfigNodeOutbound[];
     rules: NodeRoute[];
+    user_defaults: NodeUserDefault[];
     version: number;
   };
 
@@ -586,6 +591,7 @@ subscription URL does not carry them, in query-string form such as
     inherit_routing?: boolean;
     ip_strategy?: string;
     routing?: GeneratedNodeRouting;
+    routing_downgrade?: boolean;
     routing_revision?: number;
     server_id: number;
   };
@@ -1094,6 +1100,10 @@ subscription URL does not carry them, in query-string form such as
     user_id: number;
   };
 
+  type InterfaceConfig = {
+    hiddenMenuIds: string[];
+  };
+
   type InviteConfig = {
     forced_invite: boolean;
     only_first_purchase: boolean;
@@ -1171,6 +1181,20 @@ subscription URL does not carry them, in query-string form such as
     server_name?: string;
   };
 
+  type NodeDNSPolicy = {
+    query_strategy: string;
+    resolvers: NodeDNSResolver[];
+  };
+
+  type NodeDNSResolver = {
+    address: string;
+    bootstrap_ip: string;
+    domains: string[];
+    id: string;
+    outbound_id: string;
+    protocol: string;
+  };
+
   type NodeOutbound = {
     address: string;
     allow_insecure?: boolean;
@@ -1217,6 +1241,7 @@ subscription URL does not carry them, in query-string form such as
     uot_version?: number;
     user?: string;
     uuid?: string;
+    via_outbound_id?: string;
     xhttp_extra?: string;
     xhttp_mode?: string;
   };
@@ -1227,11 +1252,13 @@ subscription URL does not carry them, in query-string form such as
     kind: string;
     outbound_id: string;
     remark: string;
+    user_ids: number[];
     values: string[];
   };
 
   type NodeRoutingPolicy = {
     default_outbound_id: string;
+    dns_policy: NodeDNSPolicy;
     local_transition_revision: number;
     mode: string;
     outbounds: NodeOutbound[];
@@ -1239,6 +1266,7 @@ subscription URL does not carry them, in query-string form such as
     source: string;
     source_revision: number;
     source_server_id: number;
+    user_defaults: NodeUserDefault[];
     version: number;
   };
 
@@ -1248,7 +1276,13 @@ subscription URL does not carry them, in query-string form such as
     kind: string;
     outbound_id: string;
     remark: string;
+    user_ids: number[];
     values: string[];
+  };
+
+  type NodeUserDefault = {
+    outbound_id: string;
+    user_id: number;
   };
 
   type Order = {
@@ -1659,6 +1693,7 @@ subscription URL does not carry them, in query-string form such as
   type RoutingCandidateIdentity = {
     local_transition_revision: number;
     mode: string;
+    snapshot_id: string;
     source: string;
     source_revision: number;
     source_server_id: number;

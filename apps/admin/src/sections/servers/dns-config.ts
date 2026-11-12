@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  canonicalizeRouteRules,
-  validateRouteRules,
-  validDomainValue,
-} from "./route-rules";
+import { validDomainValue } from "./route-rules";
 
 const ipv4 = z.ipv4();
 const ipv6 = z.ipv6();
@@ -67,25 +63,4 @@ export function canonicalDNSAddress(raw: string): string | undefined {
   if (port !== undefined)
     return `${isIPv6 ? `[${host}]` : host}:${Number(port)}`;
   return host;
-}
-
-export function dnsIsValid(dns: API.NodeDNS[]): boolean {
-  return dns.every((item) => {
-    const proto = item.proto.trim().toLowerCase() || "udp";
-    return (
-      proto === "udp" &&
-      validDNSAddress(item.address) &&
-      validateRouteRules("domain", item.domains || []).length === 0
-    );
-  });
-}
-
-/** Do not send unsupported TLS server-name settings or incomplete text drafts. */
-export function dnsForWrite(dns: API.NodeDNS[]): API.NodeDNS[] {
-  return dns.map((item) => ({
-    proto: item.proto.trim().toLowerCase() || "udp",
-    address: canonicalDNSAddress(item.address) || item.address.trim(),
-    server_name: "",
-    domains: canonicalizeRouteRules("domain", item.domains),
-  }));
 }

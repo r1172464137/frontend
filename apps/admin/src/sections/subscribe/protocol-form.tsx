@@ -145,14 +145,19 @@ export function ProtocolForm() {
       accessorKey: "is_default",
       header: t("table.columns.default", "Default"),
       cell: ({ row }) => (
+        // Exactly one default: switch another application on to move it.
         <Switch
           checked={row.original.is_default}
-          onCheckedChange={async (checked) => {
-            await updateSubscribeApplication({
-              ...row.original,
-              is_default: checked,
-            });
-            tableRef.current?.refresh();
+          disabled={row.original.is_default}
+          onCheckedChange={async () => {
+            try {
+              await updateSubscribeApplication({
+                ...row.original,
+                is_default: true,
+              });
+            } finally {
+              tableRef.current?.refresh();
+            }
           }}
         />
       ),
@@ -590,9 +595,6 @@ export function ProtocolForm() {
                                 </SelectItem>
                                 <SelectItem value="conf">
                                   {t("outputFormats.conf", "CONF")}
-                                </SelectItem>
-                                <SelectItem value="plain">
-                                  {t("outputFormats.plain", "Plain Text")}
                                 </SelectItem>
                               </SelectContent>
                             </Select>
