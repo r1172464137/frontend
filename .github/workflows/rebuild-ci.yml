@@ -1,0 +1,37 @@
+name: Rebuild CI
+
+# Tests and builds the rebuild branch; never publishes or deploys.
+on:
+  push:
+    branches: ['rebuild/**']
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.1'
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Type check (admin, user; tests included)
+        run: |
+          (cd apps/admin && ../../node_modules/.bin/tsc --noEmit -p .)
+          (cd apps/user && ../../node_modules/.bin/tsc --noEmit -p .)
+      - name: Unit tests (admin, user)
+        run: |
+          (cd apps/admin && ../../node_modules/.bin/vitest run)
+          (cd apps/user && ../../node_modules/.bin/vitest run)
+      - name: Build admin
+        run: cd apps/admin && bun run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-dist
+          path: apps/admin/dist
+          retention-days: 7
