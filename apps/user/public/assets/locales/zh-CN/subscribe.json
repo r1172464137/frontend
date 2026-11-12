@@ -40,6 +40,8 @@
   "NoLimit": "无限制",
   "orBrowsePlans": "或选购其他套餐",
   "passwordHint": "如果您不输入密码，我们将自动生成一个并发送到您的邮箱。",
+  "passwordLength": "密码长度需为 8–128 位",
+  "passwordPlaceholder": "密码（至少 8 位，可不填）",
   "paymentMethod": "支付方式",
   "productDescription": "商品描述",
   "purchaseDuration": "购买时长",
@@ -49,6 +51,11 @@
   "rechargeNow": "立即充值",
   "renew": "续订",
   "renewCurrent": "续订当前订阅",
+  "renewReminder": {
+    "buyNew": "仍要另购新订阅：{{name}}",
+    "description": "续订会延长您现有订阅的时长，节点和订阅链接都保持不变。购买新套餐会另外生成一个订阅，时长和流量与原订阅分开计算。",
+    "title": "您已有订阅，建议续订"
+  },
   "renewSubscription": "续订",
   "resetPrice": "重置价格",
   "resetTraffic": "重置流量",
