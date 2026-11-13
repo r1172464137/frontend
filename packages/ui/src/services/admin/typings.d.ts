@@ -971,6 +971,7 @@ read-only from the database; null when it cannot be computed. */
   };
 
   type getUserListParams = {
+    ids?: number[];
     page: number;
     search?: string;
     size: number;
@@ -1031,6 +1032,8 @@ read-only from the database; null when it cannot be computed. */
   };
 
   type getUserSubscribeParams = {
+    /** Ids looks subscriptions up directly, in any status, instead of by user. */
+    ids?: number[];
     page: number;
     size: number;
     user_id?: number;

@@ -9,14 +9,57 @@ import {
   HoverCardTrigger,
 } from "@workspace/ui/components/hover-card";
 import {
-  getUserDetail,
+  getUserList,
+  getUserSubscribe,
   getUserSubscribeDetail as getUserSubscribeById,
 } from "@workspace/ui/services/admin/admin";
 import { formatBytes } from "@workspace/ui/utils/formatting";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Display } from "@/components/display";
 import { formatDate } from "@/utils/common";
+
+// Table rows mount together: collect the ids requested in one tick and load
+// them with one list call per 100 (the backend's ids cap). Ids the list does
+// not return (deleted records) resolve to null and keep the #id fallback.
+function createBatchLoader<T extends { id: number }>(
+  fetchIds: (ids: number[]) => Promise<T[]>
+) {
+  let batch: { ids: Set<number>; items: Promise<Map<number, T>> } | null = null;
+  return (id: number) => {
+    if (!batch) {
+      const ids = new Set<number>();
+      const items = new Promise<Map<number, T>>((resolve, reject) => {
+        setTimeout(() => {
+          batch = null;
+          const all = [...ids];
+          const chunks: Promise<T[]>[] = [];
+          for (let i = 0; i < all.length; i += 100) {
+            chunks.push(fetchIds(all.slice(i, i + 100)));
+          }
+          Promise.all(chunks).then(
+            (lists) => resolve(new Map(lists.flat().map((x) => [x.id, x]))),
+            reject
+          );
+        });
+      });
+      batch = { ids, items };
+    }
+    batch.ids.add(id);
+    return batch.items.then((items) => items.get(id) ?? null);
+  };
+}
+
+const loadUser = createBatchLoader((ids) =>
+  getUserList({ page: 1, size: ids.length, ids }).then(
+    ({ data }) => data.data?.list ?? []
+  )
+);
+
+const loadUserSubscribe = createBatchLoader((ids) =>
+  getUserSubscribe({ page: 1, size: ids.length, ids }).then(
+    ({ data }) => data.data?.list ?? []
+  )
+);
 
 export function UserSubscribeDetail({
   id,
@@ -28,10 +71,16 @@ export function UserSubscribeDetail({
   hoverCard?: boolean;
 }) {
   const { t } = useTranslation("user");
-  const [hoverOpen, setHoverOpen] = useState(false);
 
-  const { data, isLoading } = useQuery({
-    enabled: id !== 0 && enabled && (!hoverCard || hoverOpen),
+  // The table cell needs only the subscription; the full view also shows the owner.
+  const cell = useQuery({
+    enabled: id !== 0 && enabled && hoverCard,
+    queryKey: ["userSubscribeCell", id],
+    queryFn: () => loadUserSubscribe(id),
+    staleTime: 60_000,
+  });
+  const detail = useQuery({
+    enabled: id !== 0 && enabled && !hoverCard,
     queryKey: ["getUserSubscribeById", id],
     queryFn: async () => {
       const { data } = await getUserSubscribeById({ id });
@@ -39,6 +88,7 @@ export function UserSubscribeDetail({
     },
     staleTime: 60_000,
   });
+  const { data, isLoading } = hoverCard ? cell : detail;
 
   if (!id) return "--";
 
@@ -104,30 +154,37 @@ export function UserSubscribeDetail({
           <ul className="grid gap-3">
             <li className="flex items-center justify-between font-semibold">
               <span className="text-muted-foreground">{t("userId")}</span>
-              <span>{data?.user_id}</span>
+              <span>{detail.data?.user_id}</span>
             </li>
             <li className="flex items-center justify-between font-semibold">
               <span className="text-muted-foreground">{t("balance")}</span>
               <span>
-                <Display type="currency" value={data?.user.balance} />
+                <Display type="currency" value={detail.data?.user.balance} />
               </span>
             </li>
             <li className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("giftAmount")}</span>
               <span>
-                <Display type="currency" value={data?.user?.gift_amount} />
+                <Display
+                  type="currency"
+                  value={detail.data?.user?.gift_amount}
+                />
               </span>
             </li>
             <li className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("commission")}</span>
               <span>
-                <Display type="currency" value={data?.user?.commission} />
+                <Display
+                  type="currency"
+                  value={detail.data?.user?.commission}
+                />
               </span>
             </li>
             <li className="flex items-center justify-between">
               <span className="text-muted-foreground">{t("createdAt")}</span>
               <span>
-                {data?.user?.created_at && formatDate(data?.user?.created_at)}
+                {detail.data?.user?.created_at &&
+                  formatDate(detail.data.user.created_at)}
               </span>
             </li>
           </ul>
@@ -138,7 +195,7 @@ export function UserSubscribeDetail({
 
   if (hoverCard) {
     return (
-      <HoverCard onOpenChange={setHoverOpen} open={hoverOpen}>
+      <HoverCard>
         <HoverCardTrigger asChild>
           <Button className="p-0" variant="link">
             {data?.subscribe?.name || `#${id}`}
@@ -156,15 +213,11 @@ export function UserSubscribeDetail({
 
 export function UserDetail({ id }: { id: number }) {
   const { t } = useTranslation("user");
-  const [hoverOpen, setHoverOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    enabled: id !== 0 && hoverOpen,
-    queryKey: ["getUserDetail", id],
-    queryFn: async () => {
-      const { data } = await getUserDetail({ id });
-      return data.data;
-    },
+    enabled: id !== 0,
+    queryKey: ["userCell", id],
+    queryFn: () => loadUser(id),
     staleTime: 60_000,
   });
 
@@ -175,7 +228,7 @@ export function UserDetail({ id }: { id: number }) {
     data?.auth_methods[0]?.auth_identifier;
 
   return (
-    <HoverCard onOpenChange={setHoverOpen} open={hoverOpen}>
+    <HoverCard>
       <HoverCardTrigger asChild>
         <Button asChild className="p-0" variant="link">
           <Link search={{ user_id: id }} to="/dashboard/user">
